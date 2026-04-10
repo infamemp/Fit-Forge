@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIT Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Theme Variables ───────────────────────────────────────────── */
+:root,
+[data-theme="dark"]{
+  --bg:#0b0b12;--surface:#12121b;--card:#181825;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+  --text:#e8e8f0;--muted:#8888a4;--dim:#4a4a66;
+  --lime:#c8f135;--lime-dim:rgba(200,241,53,0.1);--lime-border:rgba(200,241,53,0.2);
+  --cyan:#35f1e8;--cyan-dim:rgba(53,241,232,0.08);--cyan-border:rgba(53,241,232,0.2);
+  --red:#f13553;--red-dim:rgba(241,53,83,0.1);--red-border:rgba(241,53,83,0.2);
+  --orange:#f1a035;--purple:#a035f1;--purple-dim:rgba(160,53,241,0.1);--purple-border:rgba(160,53,241,0.2);
+  --grid-opacity:0.015;--shadow-card:0 2px 12px rgba(0,0,0,0.3);
+  --toggle-bg:var(--surface);--toggle-border:var(--border2)
+}
+[data-theme="light"]{
+  --bg:#f4f4f8;--surface:#e8e8ee;--card:#ffffff;
+  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.14);
+  --text:#1a1a2e;--muted:#5a5a78;--dim:#9a9ab4;
+  --lime:#4a9e00;--lime-dim:rgba(74,158,0,0.08);--lime-border:rgba(74,158,0,0.2);
+  --cyan:#0a8a84;--cyan-dim:rgba(10,138,132,0.06);--cyan-border:rgba(10,138,132,0.2);
+  --red:#d42040;--red-dim:rgba(212,32,64,0.08);--red-border:rgba(212,32,64,0.15);
+  --orange:#c07800;--purple:#7020c0;--purple-dim:rgba(112,32,192,0.06);--purple-border:rgba(112,32,192,0.15);
+  --grid-opacity:0.03;--shadow-card:0 2px 12px rgba(0,0,0,0.06);
+  --toggle-bg:#ddd;--toggle-border:rgba(0,0,0,0.15)
+}
+
+/* ── Reset & Base ──────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;scroll-behavior:smooth}
+body{font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .35s,color .35s;line-height:1.5}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(200,241,53,var(--grid-opacity)) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(200,241,53,var(--grid-opacity)) 1px,transparent 1px);
+  background-size:52px 52px;transition:opacity .35s}
+.app{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:2rem 1.5rem 4rem}
+
+/* ── Header ────────────────────────────────────────────────────── */
+.header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1.5rem;padding-bottom:1.2rem;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:1rem}
+.logo{display:flex;align-items:center;gap:1rem}
+.logo-mark{width:50px;height:50px;border-radius:13px;background:var(--lime);display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;color:#000;letter-spacing:-2px;flex-shrink:0;
+  box-shadow:0 4px 20px rgba(200,241,53,0.25)}
+.logo h1{font-size:1.7rem;font-weight:800;letter-spacing:-.5px}
+.logo p{font-size:.72rem;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:1px;margin-top:.15rem}
+.header-right{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.hstatus{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted);text-align:right;line-height:1.8}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--lime);margin-right:.4rem;animation:pulse 2s infinite;box-shadow:0 0 8px rgba(200,241,53,0.4)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Controls Row (theme + lang) ───────────────────────────────── */
+.controls-row{display:flex;gap:.5rem;align-items:center}
+.ctrl-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;
+  background:var(--card);border:1px solid var(--border);cursor:pointer;transition:all .2s;color:var(--muted);font-size:1rem}
+.ctrl-btn:hover{border-color:var(--lime);color:var(--lime)}
+.ctrl-btn.active{background:var(--lime-dim);border-color:var(--lime-border);color:var(--lime)}
+.lang-btn{width:auto;padding:0 .65rem;font-family:'JetBrains Mono',monospace;font-size:.7rem;font-weight:700;letter-spacing:.5px}
+
+/* ── Steps ─────────────────────────────────────────────────────── */
+.steps{display:flex;gap:0;margin-bottom:1.5rem;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-card)}
+.step{flex:1;padding:.85rem 1rem;display:flex;align-items:center;gap:.6rem;font-size:.8rem;font-family:'JetBrains Mono',monospace;
+  color:var(--dim);border-right:1px solid var(--border);transition:all .3s}
+.step:last-child{border-right:none}
+.step-n{width:24px;height:24px;border-radius:7px;background:var(--surface);border:1px solid var(--dim);
+  display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;transition:all .3s}
+.step.active{color:var(--lime);background:var(--lime-dim)}.step.active .step-n{background:var(--lime);color:#000;border-color:var(--lime)}
+.step.done{color:var(--text)}.step.done .step-n{background:var(--lime);color:#000;border-color:var(--lime)}
+
+/* ── Upload Grid ───────────────────────────────────────────────── */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.fields-split{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.drop-zone{position:relative;min-height:210px;border:1.5px dashed var(--border2);border-radius:16px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:.5rem;cursor:pointer;transition:all .25s;padding:1.5rem;background:var(--card);box-shadow:var(--shadow-card)}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--lime);background:var(--lime-dim)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.dz-icon{font-size:2.2rem;opacity:.35;transition:opacity .2s}.drop-zone:hover .dz-icon{opacity:.7}
+.dz-label{font-size:.88rem;font-weight:600;color:var(--muted)}.dz-hint{font-size:.72rem;color:var(--dim);font-family:'JetBrains Mono',monospace}
+.dz-tag{position:absolute;top:14px;left:14px;font-family:'JetBrains Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:.25rem .6rem;border-radius:7px}
+.t1{background:var(--lime-dim);color:var(--lime);border:1px solid var(--lime-border)}.t2{background:var(--cyan-dim);color:var(--cyan);border:1px solid var(--cyan-border)}
+
+/* ── File Cards ────────────────────────────────────────────────── */
+.file-card{border-radius:16px;padding:1.3rem 1.5rem;position:relative;min-height:210px;display:flex;flex-direction:column;gap:.5rem;animation:fadeUp .3s ease both;box-shadow:var(--shadow-card)}
+.fc1{background:var(--lime-dim);border:1px solid var(--lime-border)}.fc2{background:var(--cyan-dim);border:1px solid var(--cyan-border)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fc-tag{font-family:'JetBrains Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+.fc1 .fc-tag{color:var(--lime)}.fc2 .fc-tag{color:var(--cyan)}
+.fc-name{font-size:.95rem;font-weight:700;word-break:break-all}.fc-meta{font-size:.72rem;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.fc-badges{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.3rem}
+.badge{display:inline-flex;align-items:center;padding:.2rem .55rem;border-radius:100px;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;border:1px solid}
+.bl{background:var(--lime-dim);border-color:var(--lime-border);color:var(--lime)}.bc{background:var(--cyan-dim);border-color:var(--cyan-border);color:var(--cyan)}
+.bo{background:rgba(241,160,53,.1);border-color:rgba(241,160,53,.2);color:var(--orange)}.bp{background:var(--purple-dim);border-color:var(--purple-border);color:var(--purple)}
+.br{background:var(--red-dim);border-color:var(--red-border);color:var(--red)}
+.fc-remove{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:8px;background:var(--red-dim);border:1px solid var(--red-border);
+  color:var(--red);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.fc-remove:hover{background:var(--red);color:#fff}
+.fc-fields{margin-top:auto;font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace;line-height:1.9}
+.fc1 .fc-cat{color:var(--lime);font-weight:700}.fc2 .fc-cat{color:var(--cyan);font-weight:700}
+
+/* ── Sections ──────────────────────────────────────────────────── */
+.section{margin-top:1rem}
+.sec-hdr{display:flex;align-items:center;gap:.7rem;margin-bottom:.7rem}
+.sec-title{font-size:.75rem;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.sec-line{flex:1;height:1px;background:var(--border)}
+
+/* ── Field Grid ────────────────────────────────────────────────── */
+.field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.4rem}
+.fb{display:flex;align-items:center;gap:.55rem;padding:.55rem .8rem;border-radius:10px;background:var(--card);border:1px solid var(--border);
+  cursor:pointer;transition:all .2s;user-select:none;box-shadow:var(--shadow-card)}
+.fb:hover{border-color:var(--border2)}.fb.on{background:var(--lime-dim);border-color:var(--lime-border);color:var(--text)}
+.fb.conflict{border-color:var(--purple-border)}
+.fb-ico{font-size:.95rem;width:20px;text-align:center;flex-shrink:0}
+.fb-inf{flex:1;min-width:0}.fb-name{font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-src{font-size:.65rem;opacity:.55;margin-top:2px}
+.fb-chk{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--dim);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;font-size:.6rem;flex-shrink:0;transition:all .2s}
+.fb.on .fb-chk{background:var(--lime);border-color:var(--lime);color:#000}
+
+/* ── Conflict Row ──────────────────────────────────────────────── */
+.cfrow{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:.6rem .9rem;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:.35rem;box-shadow:var(--shadow-card)}
+.cfname{font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:700;color:var(--purple);min-width:160px}
+.cfopts{display:flex;gap:.3rem}
+.cfbtn{padding:.25rem .65rem;border-radius:7px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:700;
+  border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all .2s}
+.cfbtn:hover{border-color:var(--border2)}.cf1{background:var(--lime-dim);border-color:var(--lime-border);color:var(--lime)}
+.cf2{background:var(--cyan-dim);border-color:var(--cyan-border);color:var(--cyan)}.cfavg{background:var(--purple-dim);border-color:var(--purple-border);color:var(--purple)}
+
+/* ── Config Rows ───────────────────────────────────────────────── */
+.tz-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;padding:1rem 1.3rem;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-card)}
+.tz-lbl{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--muted);flex-shrink:0}
+.tz-in{background:var(--surface);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.88rem;padding:.4rem .7rem;width:80px;outline:none;transition:border-color .2s}
+.tz-in:focus{border-color:var(--lime)}.tz-prev{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--lime)}.tz-det{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--orange);margin-left:auto}
+.tog{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.3rem;background:var(--card);border:1px solid var(--border);border-radius:14px;cursor:pointer;user-select:none;transition:border-color .2s;box-shadow:var(--shadow-card)}
+.tog:hover{border-color:var(--border2)}.tog-sw{width:38px;height:20px;border-radius:10px;background:var(--toggle-bg);border:1px solid var(--toggle-border);position:relative;flex-shrink:0;transition:all .25s}
+.tog-sw::after{content:'';position:absolute;top:2px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--dim);transition:all .25s}
+.tog.on .tog-sw{background:var(--lime-dim);border-color:var(--lime-border)}.tog.on .tog-sw::after{background:var(--lime);transform:translateX(17px)}
+.tog-txt{font-size:.9rem}.tog-sub{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);margin-left:auto}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+.btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem}
+.btn{padding:.4rem .9rem;border-radius:8px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;border:1px solid;transition:all .2s}
+.btn:hover{filter:brightness(1.15)}.btn-out{background:transparent;border-color:var(--border2);color:var(--muted)}.btn-out:hover{color:var(--text);border-color:var(--text)}
+.btn-merge{width:100%;padding:1.15rem;border-radius:16px;border:none;font-family:'JetBrains Mono',monospace;font-size:.88rem;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;cursor:pointer;background:var(--lime);color:#000;transition:all .3s;margin-top:1.5rem;position:relative;overflow:hidden}
+.btn-merge::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);transform:translateX(-100%);transition:transform .6s}
+.btn-merge:hover::before{transform:translateX(100%)}.btn-merge:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(200,241,53,.25)}
+.btn-merge:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* ── Progress & Result ─────────────────────────────────────────── */
+.prog{display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.3rem 1.5rem;box-shadow:var(--shadow-card)}
+.prog.show{display:block;animation:fadeUp .3s ease}.prog-lbl{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:.6rem}
+.prog-bar{height:5px;background:var(--surface);border-radius:3px;overflow:hidden}.prog-fill{height:100%;background:var(--lime);border-radius:3px;width:0%;transition:width .4s ease}
+.result{display:none;margin-top:1.5rem;background:var(--card);border:1px solid var(--lime-border);border-radius:16px;padding:1.5rem;animation:fadeUp .4s ease;box-shadow:var(--shadow-card)}
+.result.show{display:block}.res-title{font-size:.78rem;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--lime);margin-bottom:1rem}
+.res-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:.7rem;margin-bottom:1.2rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.8rem;text-align:center;transition:background .2s,border .2s}
+.stat-v{font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:700;color:var(--lime)}.stat-l{font-size:.65rem;color:var(--muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:1px}
+.btn-dl{width:100%;padding:1rem;border-radius:14px;border:none;background:var(--lime);color:#000;font-family:'JetBrains Mono',monospace;
+  font-size:.85rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .3s}
+.btn-dl:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(200,241,53,.3)}
+
+/* ── Status ────────────────────────────────────────────────────── */
+#status{display:none;padding:.75rem 1.1rem;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:.75rem;margin-bottom:1rem;animation:fadeUp .2s ease}
+#status.show{display:block}#status.err{background:var(--red-dim);border:1px solid var(--red-border);color:var(--red)}
+#status.ok{background:var(--lime-dim);border:1px solid var(--lime-border);color:var(--lime)}
+#status.info{background:var(--cyan-dim);border:1px solid var(--cyan-border);color:var(--cyan)}
+
+/* ── Category Headers ──────────────────────────────────────────── */
+
+/* ── Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--surface);border-radius:3px}
+
+/* ── Footer ────────────────────────────────────────────────────── */
+.footer{margin-top:3rem;padding:1.5rem 0 1rem;border-top:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:1rem}
+.footer-credit{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--muted);letter-spacing:1px;display:flex;align-items:center;gap:.5rem}
+.footer-credit .by-name{color:var(--lime);font-weight:700;text-transform:uppercase;letter-spacing:2px}
+.donate-row{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center}
+.donate-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1rem;border-radius:9px;font-family:'JetBrains Mono',monospace;
+  font-size:.72rem;font-weight:700;text-decoration:none;border:1px solid;transition:all .25s;cursor:pointer}
+.donate-btn:hover{transform:translateY(-1px);filter:brightness(1.15)}
+.donate-bmc{background:rgba(255,221,0,0.1);border-color:rgba(255,221,0,0.3);color:#ffdd00}
+.donate-bmc:hover{background:rgba(255,221,0,0.2);box-shadow:0 4px 16px rgba(255,221,0,0.15)}
+.donate-pp{background:rgba(0,112,243,0.1);border-color:rgba(0,112,243,0.3);color:#0070f3}
+.donate-pp:hover{background:rgba(0,112,243,0.2);box-shadow:0 4px 16px rgba(0,112,243,0.15)}
+.donate-sm{padding:.3rem .7rem;font-size:.65rem;border-radius:7px}
+
+/* ── Category Headers (mobile fix) ────────────────────────────── */
+.cat-hdr{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:.8rem 0 .4rem;padding-left:.2rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cat-hdr span{color:var(--lime)}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media(max-width:768px){
+  .app{padding:1.2rem 1rem 3rem}
+  .header{flex-direction:column;align-items:flex-start;gap:.8rem}
+  .header-right{width:100%;justify-content:space-between}
+  .logo h1{font-size:1.4rem}
+  .logo-mark{width:42px;height:42px;font-size:.95rem}
+  .steps{flex-direction:column;border-radius:10px}
+  .step{border-right:none;border-bottom:1px solid var(--border);padding:.7rem .9rem}
+  .step:last-child{border-bottom:none}
+  .upload-grid{grid-template-columns:1fr}
+  .fields-split{grid-template-columns:1fr}
+  .field-grid{grid-template-columns:1fr}
+  .res-stats{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+  .tz-row{flex-direction:column;align-items:flex-start;gap:.5rem}
+  .tz-in{width:100% !important}
+  .tz-det{margin-left:0}
+  .tog{flex-wrap:wrap;gap:.5rem}
+  .tog-sub{margin-left:0;width:100%;font-size:.68rem}
+  .cfrow{flex-direction:column;align-items:flex-start;gap:.4rem}
+  .cfname{min-width:auto}
+  .btn-merge{font-size:.8rem;padding:1rem}
+  .result{padding:1.2rem}
+  .stat-v{font-size:1.05rem}
+}
+@media(max-width:480px){
+  .app{padding:1rem .75rem 2.5rem}
+  .logo h1{font-size:1.2rem}
+  .logo p{font-size:.65rem}
+  .hstatus{font-size:.62rem}
+  .drop-zone{min-height:160px;padding:1rem}
+  .file-card{padding:1rem 1.2rem}
+  .fb{padding:.5rem .65rem}
+  .fb-name{font-size:.7rem}
+  .donate-row{flex-direction:column;align-items:center}
+  .donate-sm{font-size:0;padding:.35rem .5rem}
+  .donate-sm::before{font-size:.85rem}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark">FF</div>
+    <div><h1>FIT Forge</h1><p>MERGE STUDIO · beta-2026-04-08</p></div>
+  </div>
+  <div class="header-right">
+    <div class="controls-row">
+      <a href="https://buymeacoffee.com/REPLACE_WITH_YOUR_USERNAME" target="_blank" rel="noopener" class="donate-btn donate-bmc donate-sm" title="Buy me a coffee">☕ Donate</a>
+      <a href="https://paypal.me/REPLACE_WITH_YOUR_USERNAME" target="_blank" rel="noopener" class="donate-btn donate-pp donate-sm" title="PayPal">💙 PayPal</a>
+      <button class="ctrl-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">☀</button>
+      <button class="ctrl-btn lang-btn active" id="langBtn" onclick="toggleLang()">EN</button>
+    </div>
+    <div class="hstatus"><span class="dot"></span>LOCAL ENGINE<br>intervals.icu · Garmin Connect</div>
+  </div>
+</header>
+<div class="steps" id="stepsBar">
+  <div class="step active" id="s0"><div class="step-n">1</div><span data-i18n="step1"></span></div>
+  <div class="step" id="s1"><div class="step-n">2</div><span data-i18n="step2"></span></div>
+  <div class="step" id="s2"><div class="step-n">3</div><span data-i18n="step3"></span></div>
+</div>
+<div id="status"></div>
+<div class="upload-grid" id="uploadGrid"></div>
+<div id="configSection"></div>
+<button class="btn-merge" id="btnMerge" disabled onclick="executeMerge()">⚡ <span data-i18n="mergeBtn"></span></button>
+<div class="prog" id="prog"><div class="prog-lbl" id="progLbl"></div><div class="prog-bar"><div class="prog-fill" id="progFill"></div></div></div>
+<div class="result" id="result">
+  <div class="res-title" data-i18n="mergeComplete"></div>
+  <div class="res-stats" id="resStats"></div>
+  <button class="btn-dl" onclick="downloadResult()">⬇ <span data-i18n="downloadBtn"></span></button>
+</div>
+
+<footer class="footer">
+  <div class="footer-credit">
+    <span>⚒</span> made by <span class="by-name">infame</span>
+  </div>
+  <div class="donate-row">
+    <a href="https://buymeacoffee.com/REPLACE_WITH_YOUR_USERNAME" target="_blank" rel="noopener" class="donate-btn donate-bmc">☕ Buy me a coffee</a>
+    <a href="https://paypal.me/REPLACE_WITH_YOUR_USERNAME" target="_blank" rel="noopener" class="donate-btn donate-pp">💙 PayPal</a>
+  </div>
+</footer>
+
+</div>
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   INTERNATIONALIZATION (i18n) — EN-US / ES-MX
+   ══════════════════════════════════════════════════════════════════ */
+const I18N = {
+  en: {
+    step1:'Load Files', step2:'Configure Fields', step3:'Export',
+    mergeBtn:'MERGE & DOWNLOAD .FIT', downloadBtn:'DOWNLOAD merged_activity.fit',
+    mergeComplete:'✓ Merge Completed',
+    file:'File', dragHint:'Drag any .FIT file', dragOrClick:'Drag or click',
+    loading:'Loading', sending:'Sending to Python engine...', merging:'Merging records...', finishing:'Finishing...', done:'Done!',
+    records:'records', processing:'Processing...',
+    fileReady:'✓ File ready',
+    onlyInF1:'▶ ONLY IN F1', onlyInF2:'▶ ONLY IN F2', inBoth:'▶ IN BOTH FILES',
+    fieldsToInclude:'Fields to include', all:'All', none:'None',
+    conflictRes:'Conflict Resolution', allF1:'All', allF2:'All', average:'Average',
+    config:'Settings', localTime:'Local time', deviceId:'Device identity',
+    usingFile:'Using', autoDetected:'⚡ Auto-detected', manual:'✍ Manual',
+    markVirtual:'Mark activity as <b>Virtual Activity</b>',
+    markVirtualSub:'Garmin Connect classifies it as virtual instead of indoor',
+    includeHrv:'Include HRV data', msgs:'messages',
+    devFields:'Developer Fields', embedded:'embedded in merge · original binary data',
+    embeddedSrc:'embedded', pts:'pts',
+    conflict:'conflict',
+    connError:'❌ Connection error. Is fit_server.py running?',
+    errPrefix:'Error: ',
+    sizeKB:'KB', duration:'Duration', alignment:'Alignment', device:'Device',
+    distance:'Distance', avgHr:'Avg HR', power:'Power', np:'NP',
+    calories:'Calories', avgTemp:'Avg Temp', ascent:'Ascent', devices:'Devices',
+    profile:'Profile', fileSize:'Size', laps:'Laps', hrvMsgs:'HRV msgs', devFieldsStat:'Dev Fields',
+    mfrDescs:'Manufacturer · product · serial · sensors · profile · laps',
+    localMetaStart:'Local metadata start',
+  },
+  es: {
+    step1:'Cargar Archivos', step2:'Configurar Campos', step3:'Exportar',
+    mergeBtn:'COMBINAR Y DESCARGAR .FIT', downloadBtn:'DESCARGAR merged_activity.fit',
+    mergeComplete:'✓ Merge completado',
+    file:'Archivo', dragHint:'Arrastra cualquier .FIT', dragOrClick:'Arrastra o haz clic',
+    loading:'Cargando', sending:'Enviando al engine Python...', merging:'Combinando records...', finishing:'Finalizando...', done:'¡Listo!',
+    records:'records', processing:'Procesando...',
+    fileReady:'✓ Archivo listo',
+    onlyInF1:'▶ SOLO EN A1', onlyInF2:'▶ SOLO EN A2', inBoth:'▶ EN AMBOS ARCHIVOS',
+    fieldsToInclude:'Campos a incluir', all:'Todos', none:'Ninguno',
+    conflictRes:'Resolución de conflictos', allF1:'Todo', allF2:'Todo', average:'Promedio',
+    config:'Configuración', localTime:'Horario local', deviceId:'Identidad del dispositivo',
+    usingFile:'Usando', autoDetected:'⚡ Auto-detectado', manual:'✍ Manual',
+    markVirtual:'Marcar actividad como <b>Virtual Activity</b>',
+    markVirtualSub:'Garmin Connect la clasifica como virtual en vez de indoor',
+    includeHrv:'Incluir datos HRV', msgs:'mensajes',
+    devFields:'Campos de desarrollador', embedded:'incluidos en el merge · datos binarios originales',
+    embeddedSrc:'incluido', pts:'pts',
+    conflict:'conflicto',
+    connError:'❌ Error de conexión. ¿Está corriendo fit_server.py?',
+    errPrefix:'Error: ',
+    sizeKB:'KB', duration:'Duración', alignment:'Alineación', device:'Dispositivo',
+    distance:'Distancia', avgHr:'FC Media', power:'Potencia', np:'NP',
+    calories:'Calorías', avgTemp:'Temp Media', ascent:'Ascenso', devices:'Dispositivos',
+    profile:'Perfil', fileSize:'Tamaño', laps:'Laps', hrvMsgs:'HRV msgs', devFieldsStat:'Dev Fields',
+    mfrDescs:'Fabricante · producto · serial · sensores · perfil · laps',
+    localMetaStart:'Inicio local metadata',
+  }
+};
+
+let lang = localStorage.getItem('ff-lang') || 'en';
+function t(key){ return I18N[lang][key] || I18N.en[key] || key; }
+function applyI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k = el.getAttribute('data-i18n');
+    const v = t(k);
+    if(v.includes('<')) el.innerHTML = v; else el.textContent = v;
+  });
+}
+function toggleLang(){
+  lang = lang==='en'?'es':'en';
+  localStorage.setItem('ff-lang', lang);
+  document.getElementById('langBtn').textContent = lang.toUpperCase();
+  document.documentElement.lang = lang==='es'?'es':'en';
+  applyI18n();
+  renderAll();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   THEME — DARK / LIGHT
+   ══════════════════════════════════════════════════════════════════ */
+let theme = localStorage.getItem('ff-theme') || (window.matchMedia('(prefers-color-scheme:light)').matches ? 'light' : 'dark');
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeBtn').textContent = theme==='dark'?'☀':'☾';
+}
+function toggleTheme(){
+  theme = theme==='dark'?'light':'dark';
+  localStorage.setItem('ff-theme', theme);
+  applyTheme();
+}
+applyTheme();
+document.getElementById('langBtn').textContent = lang.toUpperCase();
+if(lang==='es') document.documentElement.lang='es';
+
+/* ══════════════════════════════════════════════════════════════════
+   APP STATE & API
+   ══════════════════════════════════════════════════════════════════ */
+const API='http://localhost:7331';
+const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true};
+
+function setStatus(msg,type='info'){const el=document.getElementById('status');if(!msg){el.className='';return;}el.textContent=msg;el.className='show '+type;}
+function setProgress(pct,lbl){document.getElementById('prog').className='prog show';document.getElementById('progFill').style.width=pct+'%';document.getElementById('progLbl').textContent=lbl;}
+function fmtLocal(iso,tzSec){const d=new Date(iso);return new Date(d.getTime()+tzSec*1000).toISOString().slice(11,19);}
+function updateSteps(n){for(let i=0;i<3;i++){const el=document.getElementById('s'+i);el.className='step'+(i<n?' done':i===n?' active':'');}}
+
+/* ══════════════════════════════════════════════════════════════════
+   RENDER — UPLOAD
+   ══════════════════════════════════════════════════════════════════ */
+function renderUpload(){document.getElementById('uploadGrid').innerHTML=renderCard(0)+renderCard(1);}
+function renderCard(idx){
+  const f=state.files[idx];
+  if(!f){
+    return `<div class="drop-zone" id="dz${idx}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');dropFile(event,${idx})">
+      <span class="dz-tag t${idx+1}">${t('file')} ${idx+1}</span>
+      <input type="file" accept=".fit,.FIT" onchange="pickFile(event,${idx})">
+      <div class="dz-icon">📁</div><div class="dz-label">${t('file')} ${idx+1}</div>
+      <div class="dz-hint">${t('dragHint')}</div><div class="dz-hint" style="margin-top:.2rem">${t('dragOrClick')}</div>
+    </div>`;
+  }
+  const byCat={};
+  for(const[k,v]of Object.entries(f.field_meta||{})){const c=v.cat||'Other';(byCat[c]||(byCat[c]=[])).push(v.desc||k);}
+  let fhtml='';for(const[c,ns]of Object.entries(byCat))fhtml+=`<div><span class="fc-cat">[${c}]</span> ${ns.join(', ')}</div>`;
+  const badges=[`<span class="badge bl">${f.records} ${t('records')}</span>`,
+    f.hrv?`<span class="badge bp">${f.hrv} HRV</span>`:'',
+    f.fields.includes('position_lat')?`<span class="badge bo">GPS</span>`:'',
+    f.fields.includes('power')?`<span class="badge bo">${lang==='es'?'Potencia':'Power'}</span>`:'',
+    f.fields.includes('heart_rate')?`<span class="badge br">HR</span>`:'',
+    f.fields.includes('left_right_balance')?`<span class="badge bp">L/R</span>`:'',
+    (f.dev_fields||[]).length?`<span class="badge" style="background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple-border)">🧩 ${f.dev_fields.length} dev</span>`:'',
+    (f.extra_std_fields||[]).length?`<span class="badge" style="background:var(--cyan-dim);color:var(--cyan);border:1px solid var(--cyan-border)">🧬 ${(f.extra_std_fields||[]).length} extra</span>`:'',
+  ].filter(Boolean).join('');
+  return `<div class="file-card fc${idx+1}">
+    <button class="fc-remove" onclick="removeFile(${idx})">✕</button>
+    <div class="fc-tag">${t('file')} ${idx+1}${f.display_name?' · '+f.display_name:''}</div><div class="fc-name">${f.name}</div>
+    <div class="fc-meta">${f.size_kb} KB · ${f.duration}${f.display_name?` · ${f.display_name}`:f.device?.product_name?` · ${f.device.product_name}`:''}</div>
+    <div class="fc-badges">${badges}</div><div class="fc-fields">${fhtml}</div>
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   UPLOAD
+   ══════════════════════════════════════════════════════════════════ */
+async function uploadFile(file,idx){
+  setStatus(t('loading')+' '+file.name+'...','info');
+  const fd=new FormData();fd.append('index',idx);fd.append('file',file,file.name);
+  try{
+    const r=await fetch(API+'/upload',{method:'POST',body:fd});
+    const data=await r.json();
+    if(!r.ok||data.error)throw new Error(data.error||'Upload failed');
+    state.files[idx]=data;
+    for(const f of data.fields)if(!(f in state.fields))state.fields[f]=true;
+    for(const df of (data.dev_fields||[])){
+      if(df.excluded_by_default){
+        state.dev_fields[df.key] = false;  // always off — user must opt in consciously
+      } else if(!(df.key in state.dev_fields)){
+        state.dev_fields[df.key] = true;
+      }
+    }
+    if(data.utc_offset_s!==null){
+      if(state.files[1]?.utc_offset_s!==null&&state.files[1]?.utc_offset_s!==undefined){state.tz=state.files[1].utc_offset_s;state.tzSource='f2';state.tzDet=true;}
+      else if(state.files[0]?.utc_offset_s!==null&&state.files[0]?.utc_offset_s!==undefined){state.tz=state.files[0].utc_offset_s;state.tzSource='f1';state.tzDet=true;}
+    }
+    setStatus(file.name+': '+data.records+' '+t('records')+', '+data.hrv+' HRV','ok');
+    if(state.files[0]&&state.files[1]){
+      const f1=new Set(state.files[0].fields),f2=new Set(state.files[1].fields);
+      for(const f of f1)if(f2.has(f)&&!state.conflicts[f])state.conflicts[f]='f1';
+      updateSteps(1);
+    }
+    renderAll();
+  }catch(e){
+    setStatus(e.message.includes('fetch')||e.message.includes('Failed')?t('connError'):t('errPrefix')+e.message,'err');
+  }
+}
+
+function pickFile(e,idx){if(e.target.files[0])uploadFile(e.target.files[0],idx);}
+function dropFile(e,idx){if(e.dataTransfer.files[0])uploadFile(e.dataTransfer.files[0],idx);}
+function removeFile(idx){state.files[idx]=null;renderAll();updateSteps(0);document.getElementById('result').className='result';document.getElementById('prog').className='prog';setStatus('');}
+
+/* ══════════════════════════════════════════════════════════════════
+   RENDER — CONFIG
+   ══════════════════════════════════════════════════════════════════ */
+function renderConfig(){
+  const sec=document.getElementById('configSection');
+  if(!state.files[0]||!state.files[1]){sec.innerHTML='';return;}
+  const f1=new Set(state.files[0].fields),f2=new Set(state.files[1].fields);
+  const only1=[...f1].filter(f=>!f2.has(f)),only2=[...f2].filter(f=>!f1.has(f)),both=[...f1].filter(f=>f2.has(f));
+  const allMeta={...(state.files[0].field_meta||{}),...(state.files[1].field_meta||{})};
+
+  function fieldBlock(names,src){
+    if(!names.length)return '<div style="color:var(--dim);font-size:.72rem;font-family:\'JetBrains Mono\',monospace;padding:.5rem">—</div>';
+    const byCat={};
+    for(const n of names){const c=allMeta[n]?.cat||'Other';(byCat[c]||(byCat[c]=[])).push(n);}
+    let h='';
+    for(const[c,ns]of Object.entries(byCat)){
+      h+=`<div class="cat-hdr"><span>${c}</span></div><div class="field-grid">`;
+      for(const n of ns){
+        const m=allMeta[n]||{icon:'·',desc:n};const on=state.fields[n]?'on':'';const ic=both.includes(n)?'conflict':'';
+        h+=`<div class="fb ${on} ${ic}" onclick="toggleField('${n}')"><span class="fb-ico">${m.icon||'·'}</span><div class="fb-inf"><div class="fb-name">${m.desc||n}</div><div class="fb-src">${both.includes(n)?'F1+F2':src==='f1'?'F1':'F2'}${both.includes(n)?' · '+t('conflict'):''}</div></div><div class="fb-chk">${on?'✓':''}</div></div>`;
+      }
+      h+='</div>';
+    }
+    return h;
+  }
+
+  const ac=both.filter(n=>state.fields[n]);
+  let cfHtml='';
+  if(ac.length){
+    const dn1=state.files[0]?.display_name||'F1';const dn2=state.files[1]?.display_name||'F2';
+    cfHtml=`<div class="section"><div class="sec-hdr"><span class="sec-title">${t('conflictRes')}</span><div class="sec-line"></div><div class="btn-row" style="margin:0"><button class="btn btn-out" onclick="setAll('f1')">${t('allF1')} ${dn1}</button><button class="btn btn-out" onclick="setAll('f2')">${t('allF2')} ${dn2}</button></div></div><div>${
+      ac.map(n=>{const c=state.conflicts[n]||'f1';return`<div class="cfrow"><span class="cfname">${allMeta[n]?.desc||n}</span><div class="cfopts"><button class="cfbtn ${c==='f1'?'cf1':''}" onclick="setCf('${n}','f1')">${dn1}</button><button class="cfbtn ${c==='f2'?'cf2':''}" onclick="setCf('${n}','f2')">${dn2}</button><button class="cfbtn ${c==='avg'?'cfavg':''}" onclick="setCf('${n}','avg')">${t('average')}</button></div></div>`;}).join('')
+    }</div></div>`;
+  }
+
+  const localStart=state.files[0].start?fmtLocal(state.files[0].start,state.tz):'?';
+  const tzH=(state.tz/3600).toFixed(1);
+  const hc=(state.files[0].hrv||0)+(state.files[1].hrv||0);
+  const off1=state.files[0]?.utc_offset_s;
+  const off2=state.files[1]?.utc_offset_s;
+
+  const allDevFields = [];
+  const devKeysSeen = new Set();
+  for(const idx of [0,1]){
+    for(const df of (state.files[idx]?.dev_fields||[])){
+      if(!devKeysSeen.has(df.key)){devKeysSeen.add(df.key);allDevFields.push({...df,src:idx});}
+    }
+  }
+  let devHtml = '';
+  if(allDevFields.length){
+    const byApp = {};
+    for(const df of allDevFields){(byApp[df.app_name]||(byApp[df.app_name]=[])).push(df);}
+    let inner = '';
+    for(const [app, dfs] of Object.entries(byApp)){
+      inner += `<div class="cat-hdr"><span>🧩 ${app}</span></div><div class="field-grid">`;
+      for(const df of dfs){
+        const on = state.dev_fields[df.key] ? 'on' : '';
+        const sample = df.sample_value !== null && df.sample_value !== undefined
+          ? `<span style="color:var(--dim);font-size:.68rem"> = ${df.sample_value}${df.units?' '+df.units:''}</span>` : '';
+        const srcLabel = 'F' + (df.src+1);
+      inner += `<div class="fb ${on}" style="${on?'':'opacity:.75'}" onclick="toggleDev('${df.key}')">
+          <span class="fb-ico">🧩</span>
+          <div class="fb-inf">
+            <div class="fb-name">${df.name}${sample}</div>
+            <div class="fb-src">${srcLabel} · ${t('embeddedSrc')} · ${df.count} ${t('pts')}</div>
+            ${df.warning ? `<div style="color:var(--cyan);font-size:.62rem;margin-top:2px">ℹ ${df.warning}</div>` : ''}
+          </div>
+          <div class="fb-chk">${on?'✓':''}</div>
+        </div>`;
+      }
+      inner += '</div>';
+    }
+    devHtml = `<div class="section"><div class="sec-hdr"><span class="sec-title">${t('devFields')}</span><div class="sec-line"></div><div style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);margin-left:auto">${t('embedded')}</div></div>${inner}</div>`;
+  }
+
+  sec.innerHTML=`<div class="section"><div class="sec-hdr"><span class="sec-title">${t('fieldsToInclude')}</span><div class="sec-line"></div><div class="btn-row" style="margin:0"><button class="btn btn-out" onclick="selAll()">${t('all')}</button><button class="btn btn-out" onclick="selNone()">${t('none')}</button></div></div>
+    <div class="fields-split">
+      <div><div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--lime);margin-bottom:.3rem;letter-spacing:1px;word-break:break-word">${t('onlyInF1').replace('F1',state.files[0]?.display_name||'F1').replace('A1',state.files[0]?.display_name||'A1')}</div>${fieldBlock(only1,'f1')}</div>
+      <div><div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--cyan);margin-bottom:.3rem;letter-spacing:1px;word-break:break-word">${t('onlyInF2').replace('F2',state.files[1]?.display_name||'F2').replace('A2',state.files[1]?.display_name||'A2')}</div>${fieldBlock(only2,'f2')}</div>
+    </div>
+    ${both.length?`<div style="margin-top:1rem"><div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--purple);margin-bottom:.3rem;letter-spacing:1px;word-break:break-word">${t('inBoth')}</div>${fieldBlock(both,'both')}</div>`:''}
+  </div>
+  ${cfHtml}
+  ${devHtml}
+  <div class="section"><div class="sec-hdr"><span class="sec-title">${t('config')}</span><div class="sec-line"></div></div>
+    <div style="display:flex;flex-direction:column;gap:.6rem">
+      <div class="tz-row"><span class="tz-lbl">${t('localTime')}</span><select class="tz-in" id="tzSrc" onchange="setTZSource(this.value)" style="width:200px"><option value="f2" ${state.tzSource==='f2'?'selected':''}>F2: ${state.files[1]?.display_name||'File 2'}</option><option value="f1" ${state.tzSource==='f1'?'selected':''}>F1: ${state.files[0]?.display_name||'File 1'}</option><option value="manual" ${state.tzSource==='manual'?'selected':''}>Manual</option></select><input type="number" class="tz-in" id="tzIn" value="${tzH}" step="0.5" min="-12" max="14" oninput="updTZ(this.value)"><span class="tz-prev" id="tzPrev">${t('localMetaStart')}: ${localStart}</span><span class="tz-det" id="tzDet">${state.tzSource==='f2'&&off2!=null?'⚡ '+t('usingFile')+' '+(state.files[1]?.display_name||'F2'):state.tzSource==='f1'&&off1!=null?'⚡ '+t('usingFile')+' '+(state.files[0]?.display_name||'F1'):state.tzSource==='manual'?t('manual'):t('autoDetected')}</span></div>
+      <div class="tz-row"><span class="tz-lbl">${t('deviceId')}</span><select class="tz-in" id="devSrc" onchange="state.deviceSource=this.value;refreshDevicePreview()" style="width:220px"><option value="f1" ${state.deviceSource==='f1'?'selected':''}>F1: ${state.files[0]?.display_name||'File 1'}</option><option value="f2" ${state.deviceSource==='f2'?'selected':''}>F2: ${state.files[1]?.display_name||'File 2'}</option></select><span class="tz-prev" id="devPrev">${t('usingFile')} ${state.deviceSource==='f2'?(state.files[1]?.display_name||'F2'):(state.files[0]?.display_name||'F1')}</span><span class="tz-det">${t('mfrDescs')}</span></div>
+      <label class="tog ${state.forceVirtual?'on':''}" onclick="state.forceVirtual=!state.forceVirtual;renderConfig()"><div class="tog-sw"></div><div class="tog-txt">${t('markVirtual')}</div><div class="tog-sub">${t('markVirtualSub')}</div></label>
+      <div class="tog ${state.hrv?'on':''}" id="togHrv" onclick="togHRV()"><div class="tog-sw"></div><span class="tog-txt">${t('includeHrv')}</span><span class="tog-sub">${hc} ${t('msgs')}</span></div>
+    </div>
+  </div>`;
+}
+
+function renderAll(){renderUpload();renderConfig();applyI18n();document.getElementById('btnMerge').disabled=!(state.files[0]&&state.files[1]);}
+function toggleField(n){state.fields[n]=!state.fields[n];renderConfig();}
+function toggleDev(k){state.dev_fields[k]=!state.dev_fields[k];renderConfig();}
+function selAll(){Object.keys(state.fields).forEach(k=>state.fields[k]=true);renderConfig();}
+function selNone(){Object.keys(state.fields).forEach(k=>state.fields[k]=false);renderConfig();}
+function setCf(n,v){state.conflicts[n]=v;renderConfig();}
+function setAll(v){Object.keys(state.conflicts).forEach(k=>state.conflicts[k]=v);renderConfig();}
+function refreshTZPreview(){const el=document.getElementById('tzPrev');const srcIdx=state.tzSource==='f2'?1:0;const st=(state.tzSource==='manual'?state.files[0]?.start:state.files[srcIdx]?.start)||state.files[0]?.start;if(el&&st)el.textContent=t('localMetaStart')+': '+fmtLocal(st,state.tz);const det=document.getElementById('tzDet');if(det){const off1=state.files[0]?.utc_offset_s;const off2=state.files[1]?.utc_offset_s;const n1=state.files[0]?.display_name||'F1';const n2=state.files[1]?.display_name||'F2';det.textContent=state.tzSource==='f2'&&off2!=null?'⚡ '+t('usingFile')+' '+n2:state.tzSource==='f1'&&off1!=null?'⚡ '+t('usingFile')+' '+n1:state.tzSource==='manual'?t('manual'):t('autoDetected');}}
+function setTZSource(src){state.tzSource=src;if(src==='f2'&&state.files[1]?.utc_offset_s!=null){state.tz=state.files[1].utc_offset_s;}else if(src==='f1'&&state.files[0]?.utc_offset_s!=null){state.tz=state.files[0].utc_offset_s;}else if(src==='manual'){const h=parseFloat(document.getElementById('tzIn')?.value);if(!isNaN(h))state.tz=Math.round(h*3600);}const inp=document.getElementById('tzIn');if(inp)inp.value=(state.tz/3600).toFixed(1);refreshTZPreview();}
+function updTZ(val){const h=parseFloat(val);if(!isNaN(h)){state.tzSource='manual';state.tz=Math.round(h*3600);const sel=document.getElementById('tzSrc');if(sel)sel.value='manual';refreshTZPreview();}}
+function refreshDevicePreview(){const el=document.getElementById('devPrev');const n1=state.files[0]?.display_name||'F1';const n2=state.files[1]?.display_name||'F2';if(el)el.textContent=t('usingFile')+' '+(state.deviceSource==='f2'?n2:n1);}
+function togHRV(){state.hrv=!state.hrv;document.getElementById('togHrv').className='tog'+(state.hrv?' on':'');}
+
+/* ══════════════════════════════════════════════════════════════════
+   MERGE
+   ══════════════════════════════════════════════════════════════════ */
+async function executeMerge(){
+  const btn=document.getElementById('btnMerge');btn.disabled=true;
+  document.getElementById('result').className='result';setStatus('');
+  setProgress(10,t('sending'));
+  const selected=Object.entries(state.fields).filter(([,v])=>v).map(([k])=>k);
+  try{
+    setProgress(30,t('merging'));
+    const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual})});
+    const data=await r.json();
+    if(!r.ok||data.error)throw new Error(data.error||'Merge failed');
+    setProgress(90,t('finishing'));
+    await new Promise(res=>setTimeout(res,200));
+    setProgress(100,t('done'));
+    setTimeout(()=>document.getElementById('prog').className='prog',800);
+    const s=data.stats;
+    document.getElementById('resStats').innerHTML=[
+      {v:s.records,l:'Records'},{v:s.hrv,l:t('hrvMsgs')},{v:s.dev_fields||0,l:t('devFieldsStat')},{v:s.laps||1,l:t('laps')},{v:s.duration,l:t('duration')},
+      {v:(s.alignment_offset_s>0?'+':'')+s.alignment_offset_s+' s',l:t('alignment')},{v:(s.utc_offset_s/3600).toFixed(1)+' h',l:'UTC Offset'},{v:s.device_name||'—',l:t('device')},
+      {v:s.distance_km+' km',l:t('distance')},{v:s.avg_hr?s.avg_hr+' bpm':'—',l:t('avgHr')},
+      {v:s.avg_power?s.avg_power+' W':'—',l:t('power')},{v:s.normalized_power?s.normalized_power+' W':'—',l:t('np')},
+      {v:s.total_calories?s.total_calories+' kcal':'—',l:t('calories')},{v:s.avg_temperature!=null?s.avg_temperature+' °C':'—',l:t('avgTemp')},
+      {v:s.ascent_m+' m',l:t('ascent')},{v:(s.num_devices||1),l:t('devices')},{v:s.has_user_profile?'✓':'—',l:t('profile')},
+      {v:s.size_kb+' '+t('sizeKB'),l:t('fileSize')},
+    ].map(x=>`<div class="stat"><div class="stat-v">${x.v}</div><div class="stat-l">${x.l}</div></div>`).join('');
+    document.getElementById('result').className='result show';
+    updateSteps(2);setStatus(t('fileReady')+' — '+s.size_kb+' KB','ok');
+  }catch(e){
+    setStatus(e.message.includes('fetch')||e.message.includes('Failed')?t('connError'):t('errPrefix')+e.message,'err');
+    document.getElementById('prog').className='prog';
+  }finally{btn.disabled=false;}
+}
+
+function downloadResult(){window.location.href=API+'/download';}
+renderAll();
+</script>
+</body>
+</html>
