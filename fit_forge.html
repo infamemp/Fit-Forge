@@ -300,6 +300,8 @@ const I18N = {
     markVirtual:'Mark activity as <b>Virtual Activity</b>',
     markVirtualSub:'Garmin Connect classifies it as virtual instead of indoor',
     includeHrv:'Include HRV data', msgs:'messages',
+    trimToShorter:'Trim to shorter file',
+    trimToShorterSub:'Cut merge at the end of the shorter file — all records have complete data from both sources',
     devFields:'Developer Fields', embedded:'embedded in merge · original binary data',
     embeddedSrc:'embedded', pts:'pts',
     conflict:'conflict',
@@ -328,6 +330,8 @@ const I18N = {
     markVirtual:'Marcar actividad como <b>Virtual Activity</b>',
     markVirtualSub:'Garmin Connect la clasifica como virtual en vez de indoor',
     includeHrv:'Incluir datos HRV', msgs:'mensajes',
+    trimToShorter:'Recortar al archivo más corto',
+    trimToShorterSub:'Corta el merge donde termina el archivo más corto — todos los records tienen datos completos de ambas fuentes',
     devFields:'Campos de desarrollador', embedded:'incluidos en el merge · datos binarios originales',
     embeddedSrc:'incluido', pts:'pts',
     conflict:'conflicto',
@@ -381,7 +385,7 @@ if(lang==='es') document.documentElement.lang='es';
    APP STATE & API
    ══════════════════════════════════════════════════════════════════ */
 const API='http://localhost:7331';
-const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true};
+const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false};
 
 function setStatus(msg,type='info'){const el=document.getElementById('status');if(!msg){el.className='';return;}el.textContent=msg;el.className='show '+type;}
 function setProgress(pct,lbl){document.getElementById('prog').className='prog show';document.getElementById('progFill').style.width=pct+'%';document.getElementById('progLbl').textContent=lbl;}
@@ -557,6 +561,12 @@ function renderConfig(){
       <div class="tz-row"><span class="tz-lbl">${t('deviceId')}</span><select class="tz-in" id="devSrc" onchange="state.deviceSource=this.value;refreshDevicePreview()" style="width:220px"><option value="f1" ${state.deviceSource==='f1'?'selected':''}>F1: ${state.files[0]?.display_name||'File 1'}</option><option value="f2" ${state.deviceSource==='f2'?'selected':''}>F2: ${state.files[1]?.display_name||'File 2'}</option></select><span class="tz-prev" id="devPrev">${t('usingFile')} ${state.deviceSource==='f2'?(state.files[1]?.display_name||'F2'):(state.files[0]?.display_name||'F1')}</span><span class="tz-det">${t('mfrDescs')}</span></div>
       <label class="tog ${state.forceVirtual?'on':''}" onclick="state.forceVirtual=!state.forceVirtual;renderConfig()"><div class="tog-sw"></div><div class="tog-txt">${t('markVirtual')}</div><div class="tog-sub">${t('markVirtualSub')}</div></label>
       <div class="tog ${state.hrv?'on':''}" id="togHrv" onclick="togHRV()"><div class="tog-sw"></div><span class="tog-txt">${t('includeHrv')}</span><span class="tog-sub">${hc} ${t('msgs')}</span></div>
+      ${(()=>{
+        const d1=state.files[0]?.duration||''; const d2=state.files[1]?.duration||'';
+        const mismatch = d1 && d2 && d1!==d2;
+        const hint = mismatch ? ` <span style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--purple);border:1px solid var(--purple-border);border-radius:4px;padding:.1rem .35rem;margin-left:.4rem">⚠ ${d1} vs ${d2}</span>` : '';
+        return `<label class="tog ${state.trimToShorter?'on':''}" onclick="state.trimToShorter=!state.trimToShorter;renderConfig()"><div class="tog-sw"></div><div class="tog-txt">${t('trimToShorter')}${hint}</div><div class="tog-sub">${t('trimToShorterSub')}</div></label>`;
+      })()}
     </div>
   </div>`;
 }
@@ -584,7 +594,7 @@ async function executeMerge(){
   const selected=Object.entries(state.fields).filter(([,v])=>v).map(([k])=>k);
   try{
     setProgress(30,t('merging'));
-    const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual})});
+    const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual,trim_to_shorter:state.trimToShorter})});
     const data=await r.json();
     if(!r.ok||data.error)throw new Error(data.error||'Merge failed');
     setProgress(90,t('finishing'));

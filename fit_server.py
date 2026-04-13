@@ -856,7 +856,7 @@ def _safe_float(v):
     try: return float(v)
     except: return None
 
-def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, selected_dev_keys=None, device_source="f1", time_source="f2", force_virtual=False):
+def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, selected_dev_keys=None, device_source="f1", time_source="f2", force_virtual=False, trim_to_shorter=False):
     import bisect
     import datetime as _dt
     import statistics as _stats
@@ -1075,6 +1075,14 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
 
     # Base file timeline is authoritative. File2 is matched by nearest aligned second.
     all_ts = sorted(map1.keys())
+
+    # Trim to shorter file: if enabled, cut F1's timeline at F2's last timestamp.
+    # This ensures every record in the merge has complete data from both sources,
+    # avoiding a tail of records where F2 has no data at all.
+    if trim_to_shorter and ts2_sorted:
+        f2_end = max(ts2_sorted)
+        all_ts = [ts for ts in all_ts if ts <= f2_end]
+
     merged = []
     for ts in all_ts:
         a = map1.get(ts, {})
@@ -1963,6 +1971,7 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
         "time_source": 'File 2 / Garmin' if str(time_source).lower() == 'f2' else 'File 1 / Biketerra/GPS',
         "device_source": 'File 2 / Garmin' if str(device_source).lower() == 'f2' else 'File 1 / Biketerra/GPS',
         "force_virtual": bool(force_virtual),
+        "trim_to_shorter": bool(trim_to_shorter),
         "device_name": device_meta.get('product_name') or f"manufacturer {device_meta.get('manufacturer', 1)} / product {device_meta.get('product', 0)}",
         "duration": f"{int(elapsed//3600):02d}:{int((elapsed%3600)//60):02d}:{int(elapsed%60):02d}",
         "distance_km": round(dist/1000, 2),
@@ -2156,12 +2165,13 @@ class Handler(BaseHTTPRequestHandler):
         device_source = req.get("device_source", "f1")
         time_source = req.get("time_source", "f2")
         force_virtual = bool(req.get("force_virtual", False))
+        trim_to_shorter = bool(req.get("trim_to_shorter", False))
 
         try:
             out_path, stats = do_merge(
                 Handler.uploads[0]["path"],
                 Handler.uploads[1]["path"],
-                selected, conflicts, utc_offset, include_hrv, selected_dev, device_source, time_source, force_virtual
+                selected, conflicts, utc_offset, include_hrv, selected_dev, device_source, time_source, force_virtual, trim_to_shorter
             )
             Handler.last_result = out_path
             self.send_json({"ok":True,"stats":stats})
