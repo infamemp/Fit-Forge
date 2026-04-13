@@ -302,6 +302,10 @@ const I18N = {
     includeHrv:'Include HRV data', msgs:'messages',
     trimToShorter:'Trim to shorter file',
     trimToShorterSub:'Cut merge at the end of the shorter file — all records have complete data from both sources',
+    f1Offset:'GPS start offset',
+    f1OffsetSub:'Skip first N seconds of the GPS file (Zwift) — use when Garmin started mid-loop on a virtual course. Works regardless of which slot Zwift was loaded into.',
+    f1OffsetAuto:'Auto',
+    f1OffsetAutoTitle:'Auto-calculate: absolute difference between F1 and F2 start times',
     devFields:'Developer Fields', embedded:'embedded in merge · original binary data',
     embeddedSrc:'embedded', pts:'pts',
     conflict:'conflict',
@@ -332,6 +336,10 @@ const I18N = {
     includeHrv:'Incluir datos HRV', msgs:'mensajes',
     trimToShorter:'Recortar al archivo más corto',
     trimToShorterSub:'Corta el merge donde termina el archivo más corto — todos los records tienen datos completos de ambas fuentes',
+    f1Offset:'Offset de inicio GPS',
+    f1OffsetSub:'Omite los primeros N segundos del archivo GPS (Zwift) — útil cuando Garmin inició a mitad de un loop en ruta virtual. Funciona sin importar en qué slot se cargó Zwift.',
+    f1OffsetAuto:'Auto',
+    f1OffsetAutoTitle:'Calcular automáticamente: diferencia absoluta entre el inicio de F1 y F2',
     devFields:'Campos de desarrollador', embedded:'incluidos en el merge · datos binarios originales',
     embeddedSrc:'incluido', pts:'pts',
     conflict:'conflicto',
@@ -385,7 +393,7 @@ if(lang==='es') document.documentElement.lang='es';
    APP STATE & API
    ══════════════════════════════════════════════════════════════════ */
 const API='http://localhost:7331';
-const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false};
+const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false,f1StartOffset:0};
 
 function setStatus(msg,type='info'){const el=document.getElementById('status');if(!msg){el.className='';return;}el.textContent=msg;el.className='show '+type;}
 function setProgress(pct,lbl){document.getElementById('prog').className='prog show';document.getElementById('progFill').style.width=pct+'%';document.getElementById('progLbl').textContent=lbl;}
@@ -567,6 +575,7 @@ function renderConfig(){
         const hint = mismatch ? ` <span style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--purple);border:1px solid var(--purple-border);border-radius:4px;padding:.1rem .35rem;margin-left:.4rem">⚠ ${d1} vs ${d2}</span>` : '';
         return `<label class="tog ${state.trimToShorter?'on':''}" onclick="state.trimToShorter=!state.trimToShorter;renderConfig()"><div class="tog-sw"></div><div class="tog-txt">${t('trimToShorter')}${hint}</div><div class="tog-sub">${t('trimToShorterSub')}</div></label>`;
       })()}
+      <div class="tz-row"><span class="tz-lbl">${t('f1Offset')}</span><input type="number" class="tz-in" id="f1OffsetIn" value="${state.f1StartOffset}" min="0" step="1" style="width:90px" oninput="state.f1StartOffset=Math.max(0,parseInt(this.value)||0)"><button class="btn btn-out" style="padding:.25rem .7rem;font-size:.72rem" onclick="autoF1Offset()" title="${t('f1OffsetAutoTitle')}">${t('f1OffsetAuto')}</button><span class="tz-det">${t('f1OffsetSub')}</span></div>
     </div>
   </div>`;
 }
@@ -583,6 +592,19 @@ function setTZSource(src){state.tzSource=src;if(src==='f2'&&state.files[1]?.utc_
 function updTZ(val){const h=parseFloat(val);if(!isNaN(h)){state.tzSource='manual';state.tz=Math.round(h*3600);const sel=document.getElementById('tzSrc');if(sel)sel.value='manual';refreshTZPreview();}}
 function refreshDevicePreview(){const el=document.getElementById('devPrev');const n1=state.files[0]?.display_name||'F1';const n2=state.files[1]?.display_name||'F2';if(el)el.textContent=t('usingFile')+' '+(state.deviceSource==='f2'?n2:n1);}
 function togHRV(){state.hrv=!state.hrv;document.getElementById('togHrv').className='tog'+(state.hrv?' on':'');}
+function autoF1Offset(){
+  // Auto-calculate: absolute difference between F1 start and F2 start.
+  // The offset is always positive — it skips the first N seconds of whichever
+  // file has GPS (Zwift), regardless of whether it was loaded as F1 or F2.
+  const f1=state.files[0]; const f2=state.files[1];
+  if(!f1?.start||!f2?.start){return;}
+  const t1=new Date(f1.start).getTime()/1000;
+  const t2=new Date(f2.start).getTime()/1000;
+  const offset=Math.round(Math.abs(t2-t1));
+  state.f1StartOffset=offset;
+  const inp=document.getElementById('f1OffsetIn');
+  if(inp)inp.value=offset;
+}
 
 /* ══════════════════════════════════════════════════════════════════
    MERGE
@@ -594,7 +616,7 @@ async function executeMerge(){
   const selected=Object.entries(state.fields).filter(([,v])=>v).map(([k])=>k);
   try{
     setProgress(30,t('merging'));
-    const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual,trim_to_shorter:state.trimToShorter})});
+    const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual,trim_to_shorter:state.trimToShorter,f1_start_offset_s:state.f1StartOffset||0})});
     const data=await r.json();
     if(!r.ok||data.error)throw new Error(data.error||'Merge failed');
     setProgress(90,t('finishing'));

@@ -856,7 +856,7 @@ def _safe_float(v):
     try: return float(v)
     except: return None
 
-def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, selected_dev_keys=None, device_source="f1", time_source="f2", force_virtual=False, trim_to_shorter=False):
+def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, selected_dev_keys=None, device_source="f1", time_source="f2", force_virtual=False, trim_to_shorter=False, f1_start_offset=0):
     import bisect
     import datetime as _dt
     import statistics as _stats
@@ -964,6 +964,49 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
     # Build raw timestamp maps first
     map1 = {_ts_sec(r['timestamp']): r for r in r1 if 'timestamp' in r}
     map2_raw = {_ts_sec(r['timestamp']): r for r in r2 if 'timestamp' in r}
+
+    # ── Auto-orient: GPS file is always the base timeline ─────────────────────
+    # The base timeline must come from whichever file has GPS (Zwift), so the
+    # merged route, distance and session start_time are always correct regardless
+    # of whether the user uploaded Zwift as F1 or F2.
+    # This swap happens FIRST — before alignment, ts2_sorted, and all downstream
+    # logic — so everything operates on correctly-oriented data.
+    def _file_has_gps(records_map):
+        for r in records_map.values():
+            lat = r.get('position_lat')
+            if lat is not None and lat not in (0, 2147483647, -2147483648):
+                return True
+        return False
+
+    _f1_has_gps = _file_has_gps(map1)
+    _f2_has_gps = _file_has_gps(map2_raw)
+    _swapped = False
+
+    if not _f1_has_gps and _f2_has_gps:
+        # F1=Garmin (no GPS), F2=Zwift (GPS) — swap so GPS file drives the timeline
+        map1, map2_raw = map2_raw, map1
+        r1,  r2        = r2,  r1
+        f1,  f2        = f2,  f1
+        path1, path2   = path2, path1
+        _swapped = True
+        # Invert device_source, time_source, and conflict slot references
+        def _invert(src):
+            if   str(src).lower() == 'f1': return 'f2'
+            elif str(src).lower() == 'f2': return 'f1'
+            return src
+        device_source = _invert(device_source)
+        time_source   = _invert(time_source)
+        conflicts = {k: (_invert(v) if v in ('f1','f2') else v)
+                     for k, v in conflicts.items()}
+
+    # GPS start offset: skip the first N seconds of the GPS-bearing file so the track
+    # starts at the correct position on a loop course when merging a partial session
+    # that began mid-way through a virtual route (e.g. Zwift loop).
+    # After the swap above, map1 is always the GPS file — apply offset directly to map1.
+    # offset=0 = default behavior unchanged.
+    if f1_start_offset and f1_start_offset > 0:
+        f1_min_ts = min(map1.keys())
+        map1 = {ts: r for ts, r in map1.items() if ts >= f1_min_ts + f1_start_offset}
 
     start_delta = min(map1.keys()) - min(map2_raw.keys())
     search_radius = 30 if abs(start_delta) <= 60 else 90
@@ -1144,6 +1187,21 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
             raw_distances.append(float(dv))
         except Exception:
             pass
+
+    # Distance offset normalization: when f1_start_offset > 0, the GPS file
+    # (Zwift) has accumulated distance from its own start, not from the merge start.
+    # Subtract the first distance value so the merged file always starts at 0.
+    if f1_start_offset and f1_start_offset > 0 and raw_distances:
+        _dist_offset = raw_distances[0]
+        if _dist_offset > 1.0:  # only normalize if there's a meaningful offset
+            for r in merged:
+                dv = r.get("distance")
+                if dv is not None:
+                    try:
+                        r["distance"] = max(0.0, float(dv) - _dist_offset)
+                    except Exception:
+                        pass
+            raw_distances = [max(0.0, d - _dist_offset) for d in raw_distances]
 
     need_distance_rebuild = False
     if not raw_distances:
@@ -1972,6 +2030,8 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
         "device_source": 'File 2 / Garmin' if str(device_source).lower() == 'f2' else 'File 1 / Biketerra/GPS',
         "force_virtual": bool(force_virtual),
         "trim_to_shorter": bool(trim_to_shorter),
+        "f1_start_offset_s": int(f1_start_offset or 0),
+        "files_auto_swapped": bool(_swapped),
         "device_name": device_meta.get('product_name') or f"manufacturer {device_meta.get('manufacturer', 1)} / product {device_meta.get('product', 0)}",
         "duration": f"{int(elapsed//3600):02d}:{int((elapsed%3600)//60):02d}:{int(elapsed%60):02d}",
         "distance_km": round(dist/1000, 2),
@@ -2166,12 +2226,13 @@ class Handler(BaseHTTPRequestHandler):
         time_source = req.get("time_source", "f2")
         force_virtual = bool(req.get("force_virtual", False))
         trim_to_shorter = bool(req.get("trim_to_shorter", False))
+        f1_start_offset = int(req.get("f1_start_offset_s", 0) or 0)
 
         try:
             out_path, stats = do_merge(
                 Handler.uploads[0]["path"],
                 Handler.uploads[1]["path"],
-                selected, conflicts, utc_offset, include_hrv, selected_dev, device_source, time_source, force_virtual, trim_to_shorter
+                selected, conflicts, utc_offset, include_hrv, selected_dev, device_source, time_source, force_virtual, trim_to_shorter, f1_start_offset
             )
             Handler.last_result = out_path
             self.send_json({"ok":True,"stats":stats})
