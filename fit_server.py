@@ -102,6 +102,20 @@ EXTRA_RECORD_FIELD_META = {
     144: {"name":"anaerobic_training_effect",       "icon":"⚡","cat":"Physiology","desc":"Anaerobic Training Effect"},
 }
 
+# Fields that should default to device_source when both files have data.
+# These are physical sensor measurements where the dedicated device (Garmin)
+# is more reliable than a virtual estimate (Zwift).
+# The user can still override any of these in the Conflict Resolution UI.
+DEVICE_SOURCE_DEFAULT_FIELDS = {
+    'left_right_balance',
+    'left_torque_effectiveness', 'right_torque_effectiveness',
+    'left_pedal_smoothness', 'right_pedal_smoothness',
+    'left_pco', 'right_pco',
+    'left_power_phase', 'left_power_phase_peak',
+    'right_power_phase', 'right_power_phase_peak',
+    'temperature',
+}
+
 def _extra_record_field_name(field_num):
     meta = EXTRA_RECORD_FIELD_META.get(field_num, {})
     return meta.get("name", f"std_field_{field_num}")
@@ -205,24 +219,40 @@ def get_extra_record_fields(path):
     info = parse_standard_record_data(path)
     defs = info.get('defs') or {}
     ts_vals = info.get('ts_vals') or {}
+    # Sentinel (invalid) values by field size — Zwift fills all extra fields with these
+    _SENTINELS = {
+        1: {0xFF, 0x7F},
+        2: {0xFFFF, 0x7FFF, 32767},
+        4: {0xFFFFFFFF, 0x7FFFFFFF, 2147483647, 4294967295},
+    }
     out = []
     for fn, meta in sorted(defs.items()):
         if fn in KNOWN_SDK_RECORD_FIELD_NUMS or fn == 253:
             continue
+        sz = meta.get('size', 1)
+        sentinels = _SENTINELS.get(sz, set())
         sample = None
         count = 0
         for ts, row in ts_vals.items():
-            if fn in row:
-                count += 1
-                if sample is None:
-                    sample = _decode_std_field_sample(fn, row.get(fn), meta.get('base', 0))
+            if fn not in row:
+                continue
+            raw = row[fn]
+            # Skip records where the entire raw value is 0xFF bytes (invalid)
+            if raw == b'\xff' * sz:
+                continue
+            v = _decode_std_field_sample(fn, raw, meta.get('base', 0))
+            if v is None or v in sentinels:
+                continue
+            count += 1
+            if sample is None:
+                sample = v
         field_meta = _extra_record_field_meta(fn)
         out.append({
             "field_num": fn,
             "name": field_meta.get("name", _extra_record_field_name(fn)),
             "sample_value": sample,
             "count": count,
-            "size": meta.get("size"),
+            "size": sz,
             "base": meta.get("base"),
         })
     return out
@@ -1036,7 +1066,11 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
         for k, v in a.items():
             if k != "timestamp" and v is not None and k in selected_fields:
                 if k in rec:
-                    strat = conflicts.get(k, "f1")
+                    # Fields in DEVICE_SOURCE_DEFAULT_FIELDS default to device_source
+                    # so physical sensor data wins over virtual estimates.
+                    # The user can still override via the Conflict Resolution UI.
+                    _default = device_source if k in DEVICE_SOURCE_DEFAULT_FIELDS else "f1"
+                    strat = conflicts.get(k, _default)
                     if strat == "f1":
                         rec[k] = v
                     elif strat == "avg":
@@ -2012,7 +2046,7 @@ class Handler(BaseHTTPRequestHandler):
             recs = msgs.get("record_mesgs",[])
             hrv  = msgs.get("hrv_mesgs",[])
             fields = get_fields(msgs)
-            extra_record_fields = get_extra_record_fields(tmp)
+            extra_record_fields = [rf for rf in get_extra_record_fields(tmp) if rf["count"] > 0]
             for rf in extra_record_fields:
                 if rf["name"] not in fields:
                     fields.append(rf["name"])

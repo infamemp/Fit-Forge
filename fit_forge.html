@@ -448,7 +448,11 @@ async function uploadFile(file,idx){
     setStatus(file.name+': '+data.records+' '+t('records')+', '+data.hrv+' HRV','ok');
     if(state.files[0]&&state.files[1]){
       const f1=new Set(state.files[0].fields),f2=new Set(state.files[1].fields);
-      for(const f of f1)if(f2.has(f)&&!state.conflicts[f])state.conflicts[f]='f1';
+      for(const f of f1)if(f2.has(f)&&!state.conflicts[f]){
+        // Fields where the device_source wins by default (physical sensor > virtual estimate)
+        const deviceSourceFields=new Set(['left_right_balance','left_torque_effectiveness','right_torque_effectiveness','left_pedal_smoothness','right_pedal_smoothness','left_pco','right_pco','left_power_phase','left_power_phase_peak','right_power_phase','right_power_phase_peak','temperature']);
+        state.conflicts[f]=deviceSourceFields.has(f)?state.deviceSource:'f1';
+      }
       updateSteps(1);
     }
     renderAll();
@@ -491,8 +495,10 @@ function renderConfig(){
   let cfHtml='';
   if(ac.length){
     const dn1=state.files[0]?.display_name||'F1';const dn2=state.files[1]?.display_name||'F2';
+    const deviceSourceFields=new Set(['left_right_balance','left_torque_effectiveness','right_torque_effectiveness','left_pedal_smoothness','right_pedal_smoothness','left_pco','right_pco','left_power_phase','left_power_phase_peak','right_power_phase','right_power_phase_peak','temperature']);
+    const recDN=state.deviceSource==='f2'?dn2:dn1;
     cfHtml=`<div class="section"><div class="sec-hdr"><span class="sec-title">${t('conflictRes')}</span><div class="sec-line"></div><div class="btn-row" style="margin:0"><button class="btn btn-out" onclick="setAll('f1')">${t('allF1')} ${dn1}</button><button class="btn btn-out" onclick="setAll('f2')">${t('allF2')} ${dn2}</button></div></div><div>${
-      ac.map(n=>{const c=state.conflicts[n]||'f1';return`<div class="cfrow"><span class="cfname">${allMeta[n]?.desc||n}</span><div class="cfopts"><button class="cfbtn ${c==='f1'?'cf1':''}" onclick="setCf('${n}','f1')">${dn1}</button><button class="cfbtn ${c==='f2'?'cf2':''}" onclick="setCf('${n}','f2')">${dn2}</button><button class="cfbtn ${c==='avg'?'cfavg':''}" onclick="setCf('${n}','avg')">${t('average')}</button></div></div>`;}).join('')
+      ac.map(n=>{const c=state.conflicts[n]||'f1';const isSensor=deviceSourceFields.has(n);const sensorBadge=isSensor?`<span style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--purple);border:1px solid var(--purple-border);border-radius:4px;padding:.1rem .35rem;margin-left:.4rem" title="Recommended: physical sensor data">★ sensor</span>`:'';return`<div class="cfrow"><span class="cfname">${allMeta[n]?.desc||n}${sensorBadge}</span><div class="cfopts"><button class="cfbtn ${c==='f1'?'cf1':''}" onclick="setCf('${n}','f1')">${dn1}</button><button class="cfbtn ${c==='f2'?'cf2':''}" onclick="setCf('${n}','f2')">${dn2}</button><button class="cfbtn ${c==='avg'?'cfavg':''}" onclick="setCf('${n}','avg')">${t('average')}</button></div></div>`;}).join('')
     }</div></div>`;
   }
 
