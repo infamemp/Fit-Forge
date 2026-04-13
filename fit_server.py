@@ -83,6 +83,8 @@ FIELD_META = {
     "left_power_phase_peak":    {"icon":"〰️","cat":"Pedaling",   "desc":"Left Power Phase Peak"},
     "right_power_phase":        {"icon":"〰️","cat":"Pedaling",   "desc":"Right Power Phase"},
     "right_power_phase_peak":   {"icon":"〰️","cat":"Pedaling",   "desc":"Right Power Phase Peak"},
+    "compressed_accumulated_power": {"icon":"💪","cat":"Performance","desc":"Compressed Accumulated Power"},
+    "cycles":                   {"icon":"🔄","cat":"Performance", "desc":"Cycles"},
     "vertical_oscillation":     {"icon":"↕️", "cat":"Running",   "desc":"Vertical Oscillation"},
     "stance_time":              {"icon":"🦶","cat":"Running",    "desc":"Ground Contact Time (ms)"},
     "stance_time_percent":      {"icon":"🦶","cat":"Running",    "desc":"Ground Contact Time %"},
@@ -265,13 +267,30 @@ def load_fit(path):
     return msgs
 
 def get_fields(msgs):
+    # SDK invalid sentinel values — fields where every record has one of these
+    # are Zwift/legacy placeholder fields with no real data (e.g. compressed_accumulated_power, cycles)
+    _SDK_INVALID = {255, 65535, 2147483647, 4294967295}
     fields = set()
+    field_vals = {}  # field_name -> set of seen values (capped at 10 for performance)
     for r in msgs.get("record_mesgs", []):
         if not isinstance(r, dict):
             continue
         for k, v in r.items():
-            if k != "timestamp" and v is not None and isinstance(k, str):
-                fields.add(k)
+            if k == "timestamp" or not isinstance(k, str) or v is None:
+                continue
+            if k == "developer_fields":
+                continue
+            if k not in field_vals:
+                field_vals[k] = set()
+            if len(field_vals[k]) < 10:
+                try:
+                    field_vals[k].add(int(v))
+                except (TypeError, ValueError):
+                    field_vals[k].add(str(v))
+    for k, vals in field_vals.items():
+        # Only include the field if it has at least one non-invalid value
+        if vals - _SDK_INVALID:
+            fields.add(k)
     return sorted(fields)
 
 def _first_dict(seq, default=None):
@@ -290,6 +309,7 @@ _DEV_APP_NAMES = {
     "1a69b10a1d314afea32f6a579ae20d9f": "HRV4Training",
     "a49d1978f19b4a8eaff0e9423d173178": "W'Balance CIQ",
     "5d8f2e4a1c7b3f9e0d6a2b4c8e1f5a3d": "Stryd",
+    "be2ee39529f849708e05c2bbb4b71050": "W'bal CIQ",  # wbal (kJ absolute) companion to W'Balance CIQ
 }
 
 SENSITIVE_DEV_APP_IDS = {
