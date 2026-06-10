@@ -1,9 +1,10 @@
 """
 Pure binary FIT writer — no fit-tool dependency.
 Writes a complete activity FIT file with optional embedded developer fields.
-VERSION: beta-2026-04-08 (fix session field numbers per FIT SDK profile 21.200:
-  24=total_training_effect, 137=anaerobic_TE, 168=training_load_peak,
-  169/170/180=enhanced respiration rates; fixes MTB Dynamics ghost tab)
+VERSION: beta-2026-06-10 (fix DeveloperDataId developer_id passthrough;
+  preserve original developer UUID so Garmin Connect resolves CIQ app fields;
+  write_developer_data_id now accepts developer_id_hex param;
+  corrected native_mesg_num/native_field_num variable labels)
 """
 import struct
 
@@ -268,8 +269,22 @@ class FitWriter:
             + _u8(1)   # 7 pwr_calc_type = percent_ftp
         )
 
-    def write_developer_data_id(self, dev_idx, app_id_hex, application_version=None):
-        """Write a DeveloperDataId message (gmn=207) using a Garmin-like layout."""
+    def write_developer_data_id(self, dev_idx, app_id_hex, application_version=None,
+                                  developer_id_hex=None):
+        """Write a DeveloperDataId message (gmn=207).
+
+        DeveloperDataId (mesg_num=207) fields:
+          0 = developer_id      (byte[16]) — developer's Garmin account UUID
+          1 = application_id    (byte[16]) — CIQ app UUID
+          2 = manufacturer_id   (uint16)
+          3 = developer_data_index (uint8)
+          4 = application_version  (uint32)
+
+        developer_id_hex: hex string of the developer's UUID from the original FIT file.
+        Preserving it is required so Garmin Connect can resolve the fields to their
+        registered CIQ app and display them correctly.  Writing all-0xFF here causes
+        Garmin Connect (post-2025 backend) to silently drop the developer fields.
+        """
         self._ensure_def('dev_data_id', _def_msg(self.LN_DEV_ID, 207, [
             (0,16,0x0d),(1,16,0x0d),(4,4,0x86),(2,2,0x84),(3,1,0x02),
         ]))
@@ -277,9 +292,19 @@ class FitWriter:
             app_id = bytes.fromhex(app_id_hex.ljust(32,'0')[:32])
         except Exception:
             app_id = b'\xff' * 16
+        # Preserve the original developer_id from the source file.
+        # All-0xFF means "no registered developer" — Garmin Connect rejects those fields.
+        dev_id = b'\xff' * 16
+        if developer_id_hex:
+            try:
+                candidate = bytes.fromhex(developer_id_hex.ljust(32, '0')[:32])
+                if candidate != b'\xff' * 16 and candidate != b'\x00' * 16:
+                    dev_id = candidate
+            except Exception:
+                pass
         app_ver = INVALID_U32 if application_version in (None, 0xFFFFFFFF) else int(application_version)
         buf = (_data_hdr(self.LN_DEV_ID)
-            + b'\xff'*16 + app_id[:16] + _u32(app_ver) + _u16(INVALID_U16) + _u8(dev_idx))
+            + dev_id[:16] + app_id[:16] + _u32(app_ver) + _u16(INVALID_U16) + _u8(dev_idx))
         self._write(buf)
 
     def write_field_description(self, dev_idx, field_def_num, base_type,

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
 FIT Forge Server — local server that connects the web interface with the merge engine.
-VERSION: beta-2026-04-08 — fix session field numbers (MTB Dynamics ghost fix);
-         replaced _is_power2_name() with per-app field exclusion table.
+VERSION: beta-2026-06-10 — preserve developer_id (DeveloperDataId field 0) so Garmin
+         Connect resolves CIQ developer fields; read _developer_id in parse_dev_data;
+         propagate through combined_defs; corrected native_mesg_num/native_field_num
+         variable labels in parse+write path.
 
 Usage:
     python fit_server.py
@@ -418,6 +420,12 @@ def parse_dev_data(path):
                     fpos += f["size"]
                 di = row.get(3, b"\x00")[0] if row.get(3) else 0
                 entry = defs.setdefault(di, {})
+                # field 0 = developer_id (developer's Garmin account UUID, byte[16])
+                # MUST be preserved — Garmin Connect (post-2025) uses it to resolve the
+                # developer registration and display CIQ fields.  Writing all-0xFF causes
+                # the fields to be silently dropped.
+                entry['_developer_id'] = row.get(0, b'\xff'*16).hex()
+                # field 1 = application_id (CIQ app UUID, byte[16])
                 entry['_app_id'] = row.get(1, b'\xff'*16).hex()
                 entry['_application_version'] = struct.unpack_from('<I' if defd['le'] else '>I', row.get(4, b'\xff\xff\xff\xff')[:4])[0] if row.get(4) and len(row.get(4, b'')) >= 4 else None
             elif gmn == 206:
@@ -433,11 +441,11 @@ def parse_dev_data(path):
                 desc_size = (row.get(6, b'\xff')[0] if row.get(6) else 0xFF)
                 sz = desc_size if desc_size != 0xFF else base_sizes.get(base, 4)
                 _nfr = row.get(14)
-                native_field_num = struct.unpack_from('<H' if defd['le'] else '>H', _nfr[:2])[0] if _nfr and len(_nfr) >= 2 else None
-                if native_field_num == 0xFFFF: native_field_num = None
-                native_mesg_num = row.get(15, b'\xff')[0] if row.get(15) else None
-                if native_mesg_num == 0xFF:
-                    native_mesg_num = 0xFF
+                native_mesg_num = struct.unpack_from('<H' if defd['le'] else '>H', _nfr[:2])[0] if _nfr and len(_nfr) >= 2 else None
+                if native_mesg_num == 0xFFFF: native_mesg_num = None
+                native_field_num = row.get(15, b'\xff')[0] if row.get(15) else None
+                if native_field_num == 0xFF:
+                    native_field_num = None
                 developer_id = row.get(13)
                 developer_id_num = struct.unpack_from('<H' if defd['le'] else '>H', developer_id[:2])[0] if developer_id and len(developer_id) >= 2 else None
                 if developer_id_num == 0xFFFF:
@@ -1497,6 +1505,13 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
                 new_di = global_dev_idx[app_id]
                 local_remap[old_di] = new_di
                 combined_defs.setdefault(new_di, {})['_app_id'] = app_id
+                # Preserve the original developer_id from the source file.
+                # Use setdefault so the first-seen value wins (it's consistent for
+                # each unique app_id, so any source is fine).
+                combined_defs[new_di].setdefault(
+                    '_developer_id',
+                    flds.get('_developer_id', 'ff'*16) if isinstance(flds, dict) else 'ff'*16
+                )
                 src_rank = dev_source_rank.get(src, src_i)
                 prev_rank = dev_meta_source_rank.get(new_di, -1)
                 prefer_this_meta = (app_id in SENSITIVE_DEV_APP_IDS and src_rank >= prev_rank) or (app_id not in SENSITIVE_DEV_APP_IDS)
@@ -1743,7 +1758,11 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
             if di not in written_dev_ids:
                 meta_di = combined_defs.get(di, {})
                 app_id_hex = meta_di.get('_app_id', 'ff' * 16)
-                fw.write_developer_data_id(di, app_id_hex, application_version=meta_di.get('_application_version'))
+                fw.write_developer_data_id(
+                    di, app_id_hex,
+                    application_version=meta_di.get('_application_version'),
+                    developer_id_hex=meta_di.get('_developer_id'),
+                )
                 written_dev_ids.add(di)
             info = combined_defs.get(di, {}).get(fn, {})
             fw.write_field_description(
