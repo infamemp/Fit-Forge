@@ -311,25 +311,47 @@ class FitWriter:
                                  field_name, units='', size=4,
                                  native_field_num=None, native_mesg_num=None,
                                  scale=None, offset=None):
-        """Write a FieldDescription message (gmn=206) using a Garmin-like layout."""
+        """Write a FieldDescription message (gmn=206) using Garmin's canonical field layout.
+
+        FieldDescription (mesg_num=206) fields actually used here:
+          0  = developer_data_index (uint8)
+          1  = field_definition_number (uint8)
+          2  = fit_base_type_id (uint8)
+          3  = field_name (string)
+          6  = scale (uint8)
+          7  = offset (sint8)
+          8  = units (string)
+          13 = fit_base_unit_id (uint16) — left invalid, not tracked
+          14 = native_mesg_num (uint16)  — e.g. 20 = Record; this is what tells
+               Garmin Connect a developer field is a per-record, chartable
+               time-series value tied to the Record message.
+          15 = native_field_num (uint8)
+
+        NOTE (fixed 2026-08-07): a previous version of this function wrote
+        native_mesg_num/native_field_num swapped, and crammed `size` into the
+        scale slot while `scale` leaked into the offset slot (the `offset` arg
+        was never used at all). That meant every dev field's native_mesg_num
+        came out as invalid (0xFFFF) instead of 20 (Record), which is very
+        likely why Garmin Connect silently omitted these fields from the chart
+        list even though the raw values were present in the file.
+        """
         name_bytes = (field_name or '').encode('utf-8')[:63] + b'\x00'
         name_bytes = name_bytes.ljust(64, b'\x00')
         units_bytes = (units or '').encode('utf-8')[:15] + b'\x00'
         units_bytes = units_bytes.ljust(16, b'\x00')
-        size_raw = INVALID_U8 if size in (None, 0xFF) else int(size)
-        scale_raw = 0x7F if scale is None else max(-127, min(127, int(scale)))
-        developer_id_raw = _u16(INVALID_U16)
-        # Garmin files often encode record message linkage as native_mesg=0xFF and native_field=20.
-        native_field_raw = _u16(INVALID_U16 if native_field_num in (None, 0xFFFF) else int(native_field_num))
-        native_mesg_raw = _u8(INVALID_U8 if native_mesg_num in (None, 0xFF) else int(native_mesg_num))
+        base_unit_raw = _u16(INVALID_U16)  # field 13, not tracked
+        native_mesg_raw = _u16(INVALID_U16 if native_mesg_num in (None, 0xFFFF) else int(native_mesg_num))   # field 14
+        native_field_raw = _u8(INVALID_U8 if native_field_num in (None, 0xFF) else int(native_field_num))    # field 15
+        scale_raw = _u8(INVALID_U8 if scale in (None, 0xFF) else max(0, min(254, int(scale))))               # field 6 (uint8)
+        offset_raw = struct.pack('<b', 0x7F if offset is None else max(-127, min(127, int(offset))))         # field 7 (sint8)
         self._ensure_def('field_desc', _def_msg(self.LN_FIELD_DESC, 206, [
             (3,64,0x07),(8,16,0x07),(13,2,0x84),(14,2,0x84),
             (0,1,0x02),(1,1,0x02),(2,1,0x02),(6,1,0x02),(7,1,0x01),(15,1,0x02),
         ]))
         buf = (_data_hdr(self.LN_FIELD_DESC)
-            + name_bytes + units_bytes + developer_id_raw + native_field_raw
+            + name_bytes + units_bytes + base_unit_raw + native_mesg_raw
             + _u8(dev_idx) + _u8(field_def_num) + _u8(base_type)
-            + _u8(size_raw) + struct.pack('<b', scale_raw) + native_mesg_raw)
+            + scale_raw + offset_raw + native_field_raw)
         self._write(buf)
 
     def define_record(self, std_fields, dev_field_entries=None):
