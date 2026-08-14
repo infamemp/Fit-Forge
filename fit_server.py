@@ -450,14 +450,15 @@ def parse_dev_data(path):
                 developer_id_num = struct.unpack_from('<H' if defd['le'] else '>H', developer_id[:2])[0] if developer_id and len(developer_id) >= 2 else None
                 if developer_id_num == 0xFFFF:
                     developer_id_num = None
-                # Field 7 = scale (sint8). Some Garmin layouts omit explicit offset.
-                scale_raw = row.get(7, b'\x7f')
+                # Field 6 = scale (uint8, invalid=0xFF), field 7 = offset (sint8, invalid=0x7F).
+                # (Field 9 is unrelated — "bits" — and was wrongly read as offset before.)
+                scale_raw = row.get(6, b'\xff')
                 scale_val = None
                 if scale_raw and len(scale_raw) >= 1:
-                    sv = struct.unpack('<b', scale_raw[:1])[0]
-                    if sv != 0x7F:
+                    sv = scale_raw[0]
+                    if sv != 0xFF:
                         scale_val = sv
-                offset_raw = row.get(9, b'\x7f')
+                offset_raw = row.get(7, b'\x7f')
                 offset_val = None
                 if offset_raw and len(offset_raw) >= 1:
                     ov = struct.unpack('<b', offset_raw[:1])[0]
@@ -822,7 +823,21 @@ def parse_all_device_info(path):
             else:
                 # skip non-device_info, already advanced pos
                 pass
-    return devices
+    # De-duplicate by device_index, keeping the first (legitimate) occurrence.
+    # Some Garmin devices (e.g. Wi-Fi sync bookkeeping) emit a spurious extra
+    # device_info message re-using device_index=0 ("creator") later in the
+    # file, with nonsensical values (e.g. impossible battery voltages). A
+    # second "creator" entry confuses Garmin Connect's device-icon resolution
+    # and can cause the recording device to not display at all.
+    seen_idx = set()
+    deduped = []
+    for dev in devices:
+        idx = dev.get('device_index', 0)
+        if idx in seen_idx:
+            continue
+        seen_idx.add(idx)
+        deduped.append(dev)
+    return deduped
 
 def parse_user_profile_and_zones(msgs):
     """Extract user_profile and zones_target from already-decoded SDK messages."""
