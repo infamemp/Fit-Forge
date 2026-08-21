@@ -393,7 +393,7 @@ if(lang==='es') document.documentElement.lang='es';
    APP STATE & API
    ══════════════════════════════════════════════════════════════════ */
 const API='http://localhost:7331';
-const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false,f1StartOffset:0};
+const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false,f1StartOffset:0,lastFileB64:null};
 
 function setStatus(msg,type='info'){const el=document.getElementById('status');if(!msg){el.className='';return;}el.textContent=msg;el.className='show '+type;}
 function setProgress(pct,lbl){document.getElementById('prog').className='prog show';document.getElementById('progFill').style.width=pct+'%';document.getElementById('progLbl').textContent=lbl;}
@@ -619,6 +619,7 @@ async function executeMerge(){
     const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual,trim_to_shorter:state.trimToShorter,f1_start_offset_s:state.f1StartOffset||0})});
     const data=await r.json();
     if(!r.ok||data.error)throw new Error(data.error||'Merge failed');
+    if(data.file_b64) state.lastFileB64=data.file_b64;
     setProgress(90,t('finishing'));
     await new Promise(res=>setTimeout(res,200));
     setProgress(100,t('done'));
@@ -641,7 +642,45 @@ async function executeMerge(){
   }finally{btn.disabled=false;}
 }
 
-function downloadResult(){window.location.href=API+'/download';}
+function downloadResult(){
+  if(!state.lastFileB64){setStatus('No merged file ready — run merge first.','err');return;}
+  try{
+    const bytes=Uint8Array.from(atob(state.lastFileB64),c=>c.charCodeAt(0));
+    const blob=new Blob([bytes],{type:'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='merged_activity.fit';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(e){setStatus('Download error: '+e.message,'err');}
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   SERVER HEALTH CHECK — runs once on load, then every 8 s
+   ══════════════════════════════════════════════════════════════════ */
+let _serverOk = false;
+async function checkServer(){
+  try{
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(), 2500);
+    const r = await fetch(API+'/ping',{signal:ctrl.signal});
+    clearTimeout(tid);
+    if(!r.ok) throw new Error();
+    if(!_serverOk){
+      _serverOk = true;
+      const el = document.getElementById('status');
+      if(el && el.classList.contains('err')) setStatus('');
+    }
+    document.querySelectorAll('.dot').forEach(d=>d.style.background='');
+  }catch(e){
+    _serverOk = false;
+    setStatus(t('connError'),'err');
+    document.querySelectorAll('.dot').forEach(d=>d.style.background='var(--red)');
+  }
+}
+checkServer();
+setInterval(checkServer, 8000);
+
 renderAll();
 </script>
 </body>

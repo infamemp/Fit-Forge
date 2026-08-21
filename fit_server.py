@@ -13,7 +13,7 @@ Then open in your browser: http://localhost:7331
 """
 
 import sys, os, json, tempfile, threading, webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # ── Dependency check ──────────────────────────────────────────────────────────
@@ -2116,6 +2116,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/" or path == "/index.html":
             self.serve_html()
+        elif path == "/ping":
+            self.send_json({"ok": True, "version": "beta-2026-06-10"})
         elif path == "/download" and Handler.last_result:
             self.serve_file(Handler.last_result)
         else:
@@ -2269,7 +2271,10 @@ class Handler(BaseHTTPRequestHandler):
                 selected, conflicts, utc_offset, include_hrv, selected_dev, device_source, time_source, force_virtual, trim_to_shorter, f1_start_offset
             )
             Handler.last_result = out_path
-            self.send_json({"ok":True,"stats":stats})
+            import base64
+            with open(out_path, "rb") as _f:
+                file_b64 = base64.b64encode(_f.read()).decode("ascii")
+            self.send_json({"ok": True, "stats": stats, "file_b64": file_b64})
         except Exception as e:
             import traceback; traceback.print_exc()
             self.send_json({"error":str(e)},500)
@@ -2281,8 +2286,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Disposition",'attachment; filename="merged_activity.fit"')
         self.send_header("Content-Length",len(data))
         self.send_header("Access-Control-Allow-Origin","*")
+        self.send_header("Connection","close")
         self.end_headers()
         self.wfile.write(data)
+        self.wfile.flush()
 
     def serve_html(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -2321,7 +2328,13 @@ class Handler(BaseHTTPRequestHandler):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    server = HTTPServer(("localhost", PORT), Handler)
+    try:
+        server = ThreadingHTTPServer(("localhost", PORT), Handler)
+    except OSError as e:
+        print(f"\n❌ Cannot start server on port {PORT}: {e}")
+        print(f"   Is another instance of fit_server.py already running?")
+        print(f"   Close it first (Ctrl+C in the other terminal) and try again.\n")
+        sys.exit(1)
     url = f"http://localhost:{PORT}"
     print(f"\n{'─'*50}")
     print(f"  🚴 FIT Forge Server")
