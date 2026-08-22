@@ -2367,11 +2367,17 @@ def start_server(port=None):
 
 
 if __name__ == "__main__":
-    server, port = start_server()
-    url = f"http://127.0.0.1:{port}"
-    print(f"\n{'-'*50}")
-    print(f"  FIT Forge Server")
-    print(f"{'-'*50}")
+    try:
+        server = ThreadingHTTPServer(("localhost", PORT), Handler)
+    except OSError as e:
+        print(f"\n❌ Cannot start server on port {PORT}: {e}")
+        print(f"   Is another instance of fit_server.py already running?")
+        print(f"   Close it first (Ctrl+C in the other terminal) and try again.\n")
+        sys.exit(1)
+    url = f"http://localhost:{PORT}"
+    print(f"\n{'─'*50}")
+    print(f"  🚴 FIT Forge Server")
+    print(f"{'─'*50}")
     print(f"  Open in your browser: {url}")
     print(f"  Ctrl+C to stop")
     print(f"{'-'*50}\n")
