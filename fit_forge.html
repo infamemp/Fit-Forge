@@ -75,6 +75,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* ── Upload Grid ───────────────────────────────────────────────── */
 .upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.dz-unified{grid-column:1/-1}
 .fields-split{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
 .drop-zone{position:relative;min-height:210px;border:1.5px dashed var(--border2);border-radius:16px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:.5rem;cursor:pointer;transition:all .25s;padding:1.5rem;background:var(--card);box-shadow:var(--shadow-card)}
@@ -88,6 +89,24 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 /* ── File Cards ────────────────────────────────────────────────── */
 .file-card{border-radius:16px;padding:1.3rem 1.5rem;position:relative;min-height:210px;display:flex;flex-direction:column;gap:.5rem;animation:fadeUp .3s ease both;box-shadow:var(--shadow-card)}
 .fc1{background:var(--lime-dim);border:1px solid var(--lime-border)}.fc2{background:var(--cyan-dim);border:1px solid var(--cyan-border)}
+/* ── Save confirmation toast ─────────────────────────────────────── */
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(140%);
+  z-index:9999;max-width:min(560px,92vw);display:flex;align-items:flex-start;gap:.75rem;
+  padding:.9rem 1.15rem;border-radius:14px;opacity:0;pointer-events:none;
+  background:var(--green-dim,#1d2a10);border:1px solid var(--green,#c4f042);
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+  transition:transform .32s cubic-bezier(.2,.9,.3,1.2),opacity .25s ease}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;pointer-events:auto}
+.toast.err{background:var(--red-dim,#2a1414);border-color:var(--red,#ff6b6b)}
+.toast-ico{font-size:1.25rem;line-height:1.2;flex:0 0 auto}
+.toast-body{min-width:0;flex:1 1 auto}
+.toast-title{font-weight:700;font-size:.9rem;color:var(--green,#c4f042);margin-bottom:.15rem}
+.toast.err .toast-title{color:var(--red,#ff6b6b)}
+.toast-sub{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted,#9aa);
+  word-break:break-all;line-height:1.45}
+.toast-x{flex:0 0 auto;background:none;border:0;color:var(--muted,#9aa);cursor:pointer;
+  font-size:1rem;padding:0 .15rem;opacity:.7}
+.toast-x:hover{opacity:1}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fc-tag{font-family:'JetBrains Mono',monospace;font-size:.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase}
 .fc1 .fc-tag{color:var(--lime)}.fc2 .fc-tag{color:var(--cyan)}
@@ -249,7 +268,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <button class="ctrl-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">☀</button>
       <button class="ctrl-btn lang-btn active" id="langBtn" onclick="toggleLang()">EN</button>
     </div>
-    <div class="hstatus"><span class="dot"></span>LOCAL ENGINE<br>intervals.icu · Garmin Connect</div>
+    <div class="hstatus"><span class="dot"></span>LOCAL ENGINE<br>100% offline · no upload</div>
   </div>
 </header>
 <div class="steps" id="stepsBar">
@@ -278,6 +297,15 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   </div>
 </footer>
 
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <span class="toast-ico" id="toastIco">✓</span>
+  <div class="toast-body">
+    <div class="toast-title" id="toastTitle"></div>
+    <div class="toast-sub" id="toastSub"></div>
+  </div>
+  <button class="toast-x" onclick="hideToast()" aria-label="close">✕</button>
+</div>
+
 </div>
 <script>
 /* ══════════════════════════════════════════════════════════════════
@@ -289,6 +317,9 @@ const I18N = {
     mergeBtn:'MERGE & DOWNLOAD .FIT', downloadBtn:'DOWNLOAD merged_activity.fit',
     mergeComplete:'✓ Merge Completed',
     file:'File', dragHint:'Drag any .FIT file', dragOrClick:'Drag or click',
+    dropBothHint:'Drop 1 or 2 .FIT files here',
+    savedTo:'✓ Saved to', noFileReady:'No merged file ready — run merge first.',
+    saveOk:'File saved:', saveErr:'Could not save the file', checkDownloads:'Check your Downloads folder',
     loading:'Loading', sending:'Sending to Python engine...', merging:'Merging records...', finishing:'Finishing...', done:'Done!',
     records:'records', processing:'Processing...',
     fileReady:'✓ File ready',
@@ -298,12 +329,12 @@ const I18N = {
     config:'Settings', localTime:'Local time', deviceId:'Device identity',
     usingFile:'Using', autoDetected:'⚡ Auto-detected', manual:'✍ Manual',
     markVirtual:'Mark activity as <b>Virtual Activity</b>',
-    markVirtualSub:'Garmin Connect classifies it as virtual instead of indoor',
+    markVirtualSub:'Some platforms classify this as virtual instead of indoor',
     includeHrv:'Include HRV data', msgs:'messages',
     trimToShorter:'Trim to shorter file',
     trimToShorterSub:'Cut merge at the end of the shorter file — all records have complete data from both sources',
     f1Offset:'GPS start offset',
-    f1OffsetSub:'Skip first N seconds of the GPS file (Zwift) — use when Garmin started mid-loop on a virtual course. Works regardless of which slot Zwift was loaded into.',
+    f1OffsetSub:'Skip first N seconds of the outdoor/GPS file — use when it started mid-loop on a virtual course. Works regardless of which slot the GPS file was loaded into.',
     f1OffsetAuto:'Auto',
     f1OffsetAutoTitle:'Auto-calculate: absolute difference between F1 and F2 start times',
     devFields:'Developer Fields', embedded:'embedded in merge · original binary data',
@@ -323,6 +354,9 @@ const I18N = {
     mergeBtn:'COMBINAR Y DESCARGAR .FIT', downloadBtn:'DESCARGAR merged_activity.fit',
     mergeComplete:'✓ Merge completado',
     file:'Archivo', dragHint:'Arrastra cualquier .FIT', dragOrClick:'Arrastra o haz clic',
+    dropBothHint:'Suelta 1 o 2 archivos .FIT aquí',
+    savedTo:'✓ Guardado en', noFileReady:'No hay archivo combinado — ejecuta el merge primero.',
+    saveOk:'Archivo guardado:', saveErr:'No se pudo guardar el archivo', checkDownloads:'Revisa tu carpeta de Descargas',
     loading:'Cargando', sending:'Enviando al engine Python...', merging:'Combinando records...', finishing:'Finalizando...', done:'¡Listo!',
     records:'records', processing:'Procesando...',
     fileReady:'✓ Archivo listo',
@@ -332,12 +366,12 @@ const I18N = {
     config:'Configuración', localTime:'Horario local', deviceId:'Identidad del dispositivo',
     usingFile:'Usando', autoDetected:'⚡ Auto-detectado', manual:'✍ Manual',
     markVirtual:'Marcar actividad como <b>Virtual Activity</b>',
-    markVirtualSub:'Garmin Connect la clasifica como virtual en vez de indoor',
+    markVirtualSub:'Algunas plataformas la clasifican como virtual en vez de indoor',
     includeHrv:'Incluir datos HRV', msgs:'mensajes',
     trimToShorter:'Recortar al archivo más corto',
     trimToShorterSub:'Corta el merge donde termina el archivo más corto — todos los records tienen datos completos de ambas fuentes',
     f1Offset:'Offset de inicio GPS',
-    f1OffsetSub:'Omite los primeros N segundos del archivo GPS (Zwift) — útil cuando Garmin inició a mitad de un loop en ruta virtual. Funciona sin importar en qué slot se cargó Zwift.',
+    f1OffsetSub:'Omite los primeros N segundos del archivo outdoor/GPS — útil cuando inició a mitad de un loop en ruta virtual. Funciona sin importar en qué slot se cargó el archivo GPS.',
     f1OffsetAuto:'Auto',
     f1OffsetAutoTitle:'Calcular automáticamente: diferencia absoluta entre el inicio de F1 y F2',
     devFields:'Campos de desarrollador', embedded:'incluidos en el merge · datos binarios originales',
@@ -392,10 +426,21 @@ if(lang==='es') document.documentElement.lang='es';
 /* ══════════════════════════════════════════════════════════════════
    APP STATE & API
    ══════════════════════════════════════════════════════════════════ */
-const API='http://localhost:7331';
-const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false,f1StartOffset:0};
+const API=(location.protocol==='http:'||location.protocol==='https:')?location.origin:'http://127.0.0.1:7331';
+const state={files:[null,null],fields:{},conflicts:{},dev_fields:{},tz:0,tzDet:false,tzSource:'f2',deviceSource:'f1',forceVirtual:false,hrv:true,trimToShorter:false,f1StartOffset:0,lastFileB64:null};
 
 function setStatus(msg,type='info'){const el=document.getElementById('status');if(!msg){el.className='';return;}el.textContent=msg;el.className='show '+type;}
+let _toastTimer=null;
+function showToast(title,sub,type='ok',ms=9000){
+  const el=document.getElementById('toast');if(!el)return;
+  document.getElementById('toastIco').textContent=type==='err'?'✕':'✓';
+  document.getElementById('toastTitle').textContent=title||'';
+  document.getElementById('toastSub').textContent=sub||'';
+  el.className='toast show'+(type==='err'?' err':'');
+  clearTimeout(_toastTimer);
+  if(ms)_toastTimer=setTimeout(hideToast,ms);
+}
+function hideToast(){const el=document.getElementById('toast');if(el)el.className='toast'+(el.classList.contains('err')?' err':'');}
 function setProgress(pct,lbl){document.getElementById('prog').className='prog show';document.getElementById('progFill').style.width=pct+'%';document.getElementById('progLbl').textContent=lbl;}
 function fmtLocal(iso,tzSec){const d=new Date(iso);return new Date(d.getTime()+tzSec*1000).toISOString().slice(11,19);}
 function updateSteps(n){for(let i=0;i<3;i++){const el=document.getElementById('s'+i);el.className='step'+(i<n?' done':i===n?' active':'');}}
@@ -403,13 +448,28 @@ function updateSteps(n){for(let i=0;i<3;i++){const el=document.getElementById('s
 /* ══════════════════════════════════════════════════════════════════
    RENDER — UPLOAD
    ══════════════════════════════════════════════════════════════════ */
-function renderUpload(){document.getElementById('uploadGrid').innerHTML=renderCard(0)+renderCard(1);}
+function renderUpload(){
+  const grid=document.getElementById('uploadGrid');
+  if(!state.files[0] && !state.files[1]){
+    grid.innerHTML = renderUnifiedDropZone();
+  } else {
+    grid.innerHTML = renderCard(0)+renderCard(1);
+  }
+}
+function renderUnifiedDropZone(){
+  return `<div class="drop-zone dz-unified" id="dzAll" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');dropFile(event,0)">
+    <span class="dz-tag t1">${t('file')}s</span>
+    <input type="file" accept=".fit,.FIT" multiple onchange="pickFile(event,0)">
+    <div class="dz-icon">📁</div><div class="dz-label">${t('dropBothHint')}</div>
+    <div class="dz-hint">${t('dragOrClick')}</div>
+  </div>`;
+}
 function renderCard(idx){
   const f=state.files[idx];
   if(!f){
     return `<div class="drop-zone" id="dz${idx}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');dropFile(event,${idx})">
       <span class="dz-tag t${idx+1}">${t('file')} ${idx+1}</span>
-      <input type="file" accept=".fit,.FIT" onchange="pickFile(event,${idx})">
+      <input type="file" accept=".fit,.FIT" multiple onchange="pickFile(event,${idx})">
       <div class="dz-icon">📁</div><div class="dz-label">${t('file')} ${idx+1}</div>
       <div class="dz-hint">${t('dragHint')}</div><div class="dz-hint" style="margin-top:.2rem">${t('dragOrClick')}</div>
     </div>`;
@@ -473,8 +533,15 @@ async function uploadFile(file,idx){
   }
 }
 
-function pickFile(e,idx){if(e.target.files[0])uploadFile(e.target.files[0],idx);}
-function dropFile(e,idx){if(e.dataTransfer.files[0])uploadFile(e.dataTransfer.files[0],idx);}
+function assignFiles(fileList,idx){
+  const files=Array.from(fileList).filter(f=>f && /\.fit$/i.test(f.name)).slice(0,2);
+  if(!files.length)return;
+  const other=idx===0?1:0;
+  const slots=[idx,other];
+  files.forEach((f,i)=>uploadFile(f,slots[i]));
+}
+function pickFile(e,idx){assignFiles(e.target.files,idx);}
+function dropFile(e,idx){assignFiles(e.dataTransfer.files,idx);}
 function removeFile(idx){state.files[idx]=null;renderAll();updateSteps(0);document.getElementById('result').className='result';document.getElementById('prog').className='prog';setStatus('');}
 
 /* ══════════════════════════════════════════════════════════════════
@@ -595,7 +662,7 @@ function togHRV(){state.hrv=!state.hrv;document.getElementById('togHrv').classNa
 function autoF1Offset(){
   // Auto-calculate: absolute difference between F1 start and F2 start.
   // The offset is always positive — it skips the first N seconds of whichever
-  // file has GPS (Zwift), regardless of whether it was loaded as F1 or F2.
+  // file has GPS, regardless of whether it was loaded as F1 or F2.
   const f1=state.files[0]; const f2=state.files[1];
   if(!f1?.start||!f2?.start){return;}
   const t1=new Date(f1.start).getTime()/1000;
@@ -619,6 +686,7 @@ async function executeMerge(){
     const r=await fetch(API+'/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:selected,dev_fields:Object.entries(state.dev_fields).filter(([,v])=>v).map(([k])=>k),conflicts:state.conflicts,utc_offset_s:state.tz,include_hrv:state.hrv,device_source:state.deviceSource,time_source:state.tzSource,force_virtual:state.forceVirtual,trim_to_shorter:state.trimToShorter,f1_start_offset_s:state.f1StartOffset||0})});
     const data=await r.json();
     if(!r.ok||data.error)throw new Error(data.error||'Merge failed');
+    if(data.file_b64) state.lastFileB64=data.file_b64;
     setProgress(90,t('finishing'));
     await new Promise(res=>setTimeout(res,200));
     setProgress(100,t('done'));
@@ -641,7 +709,69 @@ async function executeMerge(){
   }finally{btn.disabled=false;}
 }
 
-function downloadResult(){window.location.href=API+'/download';}
+async function downloadResult(){
+  if(!state.lastFileB64){setStatus(t('noFileReady'),'err');return;}
+
+  // Desktop app (pywebview): use a native Save As dialog.
+  if(window.pywebview && window.pywebview.api && window.pywebview.api.save_fit){
+    try{
+      const res=await window.pywebview.api.save_fit(state.lastFileB64,'merged_activity.fit');
+      if(res && res.ok){
+        setStatus(t('savedTo')+' '+res.path,'ok');
+        const p=String(res.path).replace(/\\/g,'/');
+        const fname=p.slice(p.lastIndexOf('/')+1);
+        const folder=p.slice(0,p.lastIndexOf('/'))||'';
+        showToast(t('saveOk')+' '+fname, folder,'ok');
+      }
+      else if(res && res.cancelled){/* user closed the dialog — say nothing */}
+      else{
+        const msg=(res&&res.error)||'save failed';
+        setStatus(t('errPrefix')+msg,'err');
+        showToast(t('saveErr'),msg,'err');
+      }
+    }catch(e){setStatus(t('errPrefix')+e.message,'err');showToast(t('saveErr'),e.message,'err');}
+    return;
+  }
+
+  // Browser fallback: blob download.
+  try{
+    const bytes=Uint8Array.from(atob(state.lastFileB64),c=>c.charCodeAt(0));
+    const blob=new Blob([bytes],{type:'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='merged_activity.fit';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    showToast(t('saveOk')+' merged_activity.fit', t('checkDownloads'),'ok');
+  }catch(e){setStatus(t('errPrefix')+e.message,'err');showToast(t('saveErr'),e.message,'err');}
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   SERVER HEALTH CHECK — runs once on load, then every 8 s
+   ══════════════════════════════════════════════════════════════════ */
+let _serverOk = false;
+async function checkServer(){
+  try{
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(), 2500);
+    const r = await fetch(API+'/ping',{signal:ctrl.signal});
+    clearTimeout(tid);
+    if(!r.ok) throw new Error();
+    if(!_serverOk){
+      _serverOk = true;
+      const el = document.getElementById('status');
+      if(el && el.classList.contains('err')) setStatus('');
+    }
+    document.querySelectorAll('.dot').forEach(d=>d.style.background='');
+  }catch(e){
+    _serverOk = false;
+    setStatus(t('connError'),'err');
+    document.querySelectorAll('.dot').forEach(d=>d.style.background='var(--red)');
+  }
+}
+checkServer();
+setInterval(checkServer, 8000);
+
 renderAll();
 </script>
 </body>

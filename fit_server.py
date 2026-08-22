@@ -13,7 +13,7 @@ Then open in your browser: http://localhost:7331
 """
 
 import sys, os, json, tempfile, threading, webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # ── Dependency check ──────────────────────────────────────────────────────────
@@ -56,6 +56,27 @@ from fit_tool.profile.profile_type import (
 
 FIT_EPOCH = 631065600
 PORT = 7331
+
+
+def resource_path(name):
+    """Locate a bundled data file, whether running from source or a PyInstaller .exe."""
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, name)
+
+
+def find_free_port(preferred=PORT):
+    """Return the preferred port if free, otherwise any free port."""
+    import socket
+    for candidate in (preferred, 0):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", candidate))
+            return s.getsockname()[1]
+        except OSError:
+            continue
+        finally:
+            s.close()
+    return preferred
 
 # ── Field categories for the UI ───────────────────────────────────────────────
 FIELD_META = {
@@ -2060,8 +2081,8 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
         "alignment_offset_s": int(best_shift),
         "utc_offset_s": int(utc_offset),
         "record_time_shift_s": int(record_time_shift),
-        "time_source": 'File 2 / Garmin' if str(time_source).lower() == 'f2' else 'File 1 / Biketerra/GPS',
-        "device_source": 'File 2 / Garmin' if str(device_source).lower() == 'f2' else 'File 1 / Biketerra/GPS',
+        "time_source": f'File 2 / {Handler.uploads[1].get("display_name","Device")}' if str(time_source).lower() == 'f2' else f'File 1 / {Handler.uploads[0].get("display_name","Device")}',
+        "device_source": f'File 2 / {Handler.uploads[1].get("display_name","Device")}' if str(device_source).lower() == 'f2' else f'File 1 / {Handler.uploads[0].get("display_name","Device")}',
         "force_virtual": bool(force_virtual),
         "trim_to_shorter": bool(trim_to_shorter),
         "f1_start_offset_s": int(f1_start_offset or 0),
@@ -2082,6 +2103,14 @@ def do_merge(path1, path2, selected_fields, conflicts, utc_offset, include_hrv, 
         "size_kb": round(os.path.getsize(out_path)/1024, 1),
     }
     return out_path, stats
+
+# ── Quiet server: don't dump a traceback for benign client disconnects ────────
+class QuietThreadingHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        exc_type = sys.exc_info()[0]
+        if exc_type in (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            return  # client closed the connection early — harmless, don't log
+        super().handle_error(request, client_address)
 
 # ── HTTP Handler ──────────────────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
@@ -2116,6 +2145,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/" or path == "/index.html":
             self.serve_html()
+        elif path == "/ping":
+            self.send_json({"ok": True, "version": "beta-2026-06-10"})
         elif path == "/download" and Handler.last_result:
             self.serve_file(Handler.last_result)
         else:
@@ -2222,6 +2253,7 @@ class Handler(BaseHTTPRequestHandler):
                 display_name = _mfr_display
             else:
                 display_name = fname.replace('.fit','').replace('.FIT','')
+            Handler.uploads[idx]["display_name"] = display_name
             self.send_json({
                 "ok": True, "idx": idx,
                 "name": fname, "size_kb": round(len(fdata)/1024,1),
@@ -2269,7 +2301,10 @@ class Handler(BaseHTTPRequestHandler):
                 selected, conflicts, utc_offset, include_hrv, selected_dev, device_source, time_source, force_virtual, trim_to_shorter, f1_start_offset
             )
             Handler.last_result = out_path
-            self.send_json({"ok":True,"stats":stats})
+            import base64
+            with open(out_path, "rb") as _f:
+                file_b64 = base64.b64encode(_f.read()).decode("ascii")
+            self.send_json({"ok": True, "stats": stats, "file_b64": file_b64})
         except Exception as e:
             import traceback; traceback.print_exc()
             self.send_json({"error":str(e)},500)
@@ -2281,11 +2316,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Disposition",'attachment; filename="merged_activity.fit"')
         self.send_header("Content-Length",len(data))
         self.send_header("Access-Control-Allow-Origin","*")
+        self.send_header("Connection","close")
         self.end_headers()
         self.wfile.write(data)
+        self.wfile.flush()
 
     def serve_html(self):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
         candidates = [
             "fit_forge_reviewed_fixed.html",
             "fit_forge_fixed.html",
@@ -2293,14 +2329,14 @@ class Handler(BaseHTTPRequestHandler):
         ]
         html_path = None
         for name in candidates:
-            candidate = os.path.join(base_dir, name)
+            candidate = resource_path(name)
             if os.path.exists(candidate):
                 html_path = candidate
                 break
         if not html_path:
             msg = (
                 "No HTML interface file found.\n\n"
-                f"Searched folder: {base_dir}\n"
+                f"Searched folder: {getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))}\n"
                 "Tried:\n - fit_forge_reviewed_fixed.html\n - fit_forge_fixed.html\n - fit_forge.html\n"
             ).encode("utf-8")
             self.send_response(500)
@@ -2317,20 +2353,32 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-FIT-Forge-HTML", os.path.basename(html_path))
         self.end_headers()
         self.wfile.write(data)
+        self.wfile.flush()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+def start_server(port=None):
+    """Start the HTTP server on a background thread. Returns (server, port)."""
+    port = port or find_free_port(PORT)
+    server = QuietThreadingHTTPServer(("127.0.0.1", port), Handler)
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    return server, port
+
+
 if __name__ == "__main__":
-    server = HTTPServer(("localhost", PORT), Handler)
-    url = f"http://localhost:{PORT}"
-    print(f"\n{'─'*50}")
-    print(f"  🚴 FIT Forge Server")
-    print(f"{'─'*50}")
+    server, port = start_server()
+    url = f"http://127.0.0.1:{port}"
+    print(f"\n{'-'*50}")
+    print(f"  FIT Forge Server")
+    print(f"{'-'*50}")
     print(f"  Open in your browser: {url}")
     print(f"  Ctrl+C to stop")
-    print(f"{'─'*50}\n")
+    print(f"{'-'*50}\n")
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     try:
-        server.serve_forever()
+        while True:
+            threading.Event().wait(1)
     except KeyboardInterrupt:
         print("\n  Server stopped.")
+        server.shutdown()
