@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
 FIT Forge Server — local server that connects the web interface with the merge engine.
-VERSION: beta-2026-06-10 — preserve developer_id (DeveloperDataId field 0) so Garmin
+VERSION: beta-2026-11-01 — skip Connect IQ developer-field bytes in parse_device_metadata
+         and parse_all_device_info (fixed "index out of range" on load); device name
+         from the FIT SDK profile.
+Previous: beta-2026-06-10 — preserve developer_id (DeveloperDataId field 0) so Garmin
          Connect resolves CIQ developer fields; read _developer_id in parse_dev_data;
          propagate through combined_defs; corrected native_mesg_num/native_field_num
          variable labels in parse+write path.
@@ -727,6 +730,7 @@ def parse_device_metadata(path):
             for fn, sz, bt in defd['fields']:
                 row[fn] = data[pos:pos+sz]
                 pos += sz
+            pos += defd['total'] - sum(sz for _, sz, _ in defd['fields'])  # skip developer (Connect IQ) field bytes
             if defd['gmn'] == 0 and file_id is None:
                 file_id = row; file_id_le = defd['le']
             elif defd['gmn'] == 23 and device_info is None:
@@ -765,6 +769,20 @@ def parse_device_metadata(path):
         if act_ts is not None and local_ts not in (None, 0xFFFFFFFF):
             meta['local_timestamp_offset'] = int(local_ts) - int(act_ts)
     return meta
+
+def _garmin_product_name(prod_id):
+    """Human-readable Garmin model name from the FIT SDK profile, e.g. 4061 -> 'Edge 540'."""
+    try:
+        from garmin_fit_sdk import Profile
+        key = Profile["types"]["garmin_product"].get(int(prod_id))
+    except Exception:
+        return None
+    if not key:
+        return None
+    parts = key.split("_")
+    if parts[0].startswith("fr") and parts[0][2:].isdigit():
+        parts[0] = "Forerunner " + parts[0][2:]
+    return " ".join(p if p[:1].isdigit() or p.startswith("Forerunner") else p.capitalize() for p in parts)
 
 def parse_all_device_info(path):
     """Extract ALL device_info messages from source FIT file for pass-through."""
@@ -805,6 +823,7 @@ def parse_all_device_info(path):
             row = {}
             for fn, sz, bt in defd['fields']:
                 row[fn] = data[pos:pos+sz]; pos += sz
+            pos += defd['total'] - sum(sz for _, sz, _ in defd['fields'])  # skip developer (Connect IQ) field bytes
             if defd['gmn'] == 23:  # device_info
                 le = defd['le']
                 def _u16d(raw, default=None):
@@ -2146,7 +2165,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/" or path == "/index.html":
             self.serve_html()
         elif path == "/ping":
-            self.send_json({"ok": True, "version": "beta-2026-06-10"})
+            self.send_json({"ok": True, "version": "beta-2026-11-01"})
         elif path == "/download" and Handler.last_result:
             self.serve_file(Handler.last_result)
         else:
@@ -2240,15 +2259,12 @@ class Handler(BaseHTTPRequestHandler):
                 _mfr_display = "Garmin"
             else:
                 _mfr_display = str(_mfr_raw)
-            # Garmin product IDs
-            _GARMIN_PRODUCTS = {4061:"Edge 540",4062:"Edge 540 Solar",4063:"Edge 840",
-                                4064:"Edge 840 Solar",3943:"Edge 1040",3944:"Edge 1040 Solar",
-                                3570:"Edge 530",3121:"Edge 830",3112:"Edge 1030 Plus",
-                                3589:"Edge 130 Plus",3837:"Forerunner 955",3990:"Forerunner 265"}
+            # Garmin product name from the official SDK profile (Solar variants share the base ID)
+            _garmin_model = _garmin_product_name(_prod_id) if _mfr_display == "Garmin" else None
             if _prod_name:
                 display_name = _prod_name
-            elif _mfr_display == "Garmin" and isinstance(_prod_id, int) and _prod_id in _GARMIN_PRODUCTS:
-                display_name = f"Garmin {_GARMIN_PRODUCTS[_prod_id]}"
+            elif _garmin_model:
+                display_name = f"Garmin {_garmin_model}"
             elif _mfr_display and _mfr_display not in ("0","1","256"):
                 display_name = _mfr_display
             else:
